@@ -1,0 +1,30 @@
+QMainWindow {
+    background: #d4d0c8;
+}
+
+QWidget {
+    background: #d4d0c8;
+    color: black;
+}
+
+QGroupBox {
+    border: 2px solid #808080;
+    margin-top: 8px;
+    padding-top: 10px;
+    background: #ece9d8;
+}
+
+QPushButton {
+    background: #ece9d8;
+    border: 1px solid #808080;
+    padding: 5px;
+}
+
+QPushButton:hover {
+    background: white;
+}
+
+QLineEdit {
+    background: white;
+    border: 1px solid gray;
+}
