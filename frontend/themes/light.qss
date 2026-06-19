@@ -1,0 +1,50 @@
+QMainWindow {
+    background:#ECE9D8;
+}
+
+QWidget {
+    color:black;
+    font-size:11px;
+}
+
+QFrame {
+    background:#F4F4F4;
+    border:1px solid #808080;
+}
+
+QTableView {
+    background:white;
+    border:1px solid gray;
+    gridline-color:#d0d0d0;
+}
+
+QTreeView {
+    background:white;
+    border:1px solid gray;
+}
+
+QHeaderView::section {
+    background:#d4d0c8;
+    border:1px solid gray;
+    padding:4px;
+}
+
+QToolBar {
+    spacing:4px;
+    background:#ECE9D8;
+    border-bottom:1px solid gray;
+}
+
+QStatusBar {
+    background:#ECE9D8;
+}
+
+QPushButton {
+    border:1px solid gray;
+    padding:3px;
+    background:#ECE9D8;
+}
+
+QPushButton:hover {
+    background:#e5e5e5;
+}

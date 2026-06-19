@@ -1,15 +1,19 @@
 """
-Lua script sandbox with two-phase loading.
+Lua script sandbox with injector-driven two-phase loading.
 
 Phase 1 — Extract METADATA and evaluate compatibility (no sandbox).
-Phase 2 — Full sandbox with restricted globals (only if compatible).
+Phase 2 — Full sandbox with injector-driven namespaces (only if compatible).
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Optional
+from time import monotonic_ns
+from typing import Any
 
 from lupa import LuaRuntime
 
+from backend.core.injectors import HookInjector, all_injectors, init_injectors
 from backend.interfaces.enums import CompatAction, Permission
 from backend.interfaces.plugins import BaseDriver, BaseUserScript, PluginMeta
 
@@ -61,29 +65,51 @@ class LuaScriptWrapper(BaseUserScript):
     def __init__(self, file_path: Path, source: str, meta: PluginMeta) -> None:
         self.file_path = file_path
         self.METADATA = meta
-        self._hooks: dict[str, Any] = {}
-        self._events: dict[str, Any] = {}
+        self._callbacks: dict[str, Any] = {}
         self._output_buffer: list[str] = []
         self._driver: BaseDriver | None = None
+        self._cooldown_until: int = 0
 
-        # Phase 2 — full sandbox
+        perms = set(meta.get("permissions", []))
+
         self.lua = LuaRuntime(unpack_returned_tuples=True)
         g = self.lua.globals()
 
-        g["argus"] = self.lua.table_from(
+        argus_tbl = self.lua.table_from(
             {
-                "hooks": self.lua.table_from({}),
+                "lifecycle": self.lua.table_from({}),
                 "events": self.lua.table_from({}),
                 "api": self.lua.table_from({}),
             }
         )
+        g["argus"] = argus_tbl
 
+        # Phase 2a — inject stubs (create deeper namespace tables)
+        for inj in self._all_injectors():
+            inj.inject_stub(self.lua, argus_tbl)
+
+        # Phase 2b — execute script (script fills in callbacks + uses APIs)
         self.lua.execute(source)
 
+        # Phase 2c — sandbox dangerous globals
         self._sandbox_globals(g)
-        self._install_argus_api(g)
+
+        # Phase 2d — capture callbacks and install APIs via injectors
+        for inj in self._all_injectors():
+            captured = inj.capture_or_install(self.lua, argus_tbl, self, perms)
+            self._callbacks.update(captured)
+
+        # Phase 2e — wire print alias to argus.api.print
         g["print"] = g["argus"]["api"]["print"]
-        self._capture_hooks_and_events(g)
+
+    # ------------------------------------------------------------------
+    # Injector helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _all_injectors() -> list[HookInjector]:
+        init_injectors()
+        return all_injectors()
 
     # ------------------------------------------------------------------
     # Factory — Phase 1 + Phase 2
@@ -95,22 +121,23 @@ class LuaScriptWrapper(BaseUserScript):
         file_path: Path,
         compat_ctx: Any,
         config: Any,
-    ) -> Optional["LuaScriptWrapper"]:
-        """Phase 1: extract METADATA, evaluate compatibility.
-        Phase 2: build full sandbox (if compatible)."""
+    ) -> LuaScriptWrapper | None:
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
 
         # Phase 1 — bare runtime, stub argus, no sandbox
         phase1 = LuaRuntime(unpack_returned_tuples=True)
         g1 = phase1.globals()
-        g1["argus"] = phase1.table_from(
+        argus1 = phase1.table_from(
             {
-                "hooks": phase1.table_from({}),
+                "lifecycle": phase1.table_from({}),
                 "events": phase1.table_from({}),
                 "api": phase1.table_from({}),
             }
         )
+        g1["argus"] = argus1
+        for inj in cls._all_injectors():
+            inj.inject_stub(phase1, argus1)
         phase1.execute(source)
         meta = cls._parse_metadata(g1, file_path)
 
@@ -119,7 +146,6 @@ class LuaScriptWrapper(BaseUserScript):
         if not compatible:
             return None
 
-        # Phase 2 — pass source to avoid re-reading
         return cls(file_path, source, meta)
 
     # ------------------------------------------------------------------
@@ -130,7 +156,7 @@ class LuaScriptWrapper(BaseUserScript):
     def _parse_metadata(g: Any, file_path: Path) -> PluginMeta:
         try:
             lua_meta = g["METADATA"]
-        except KeyError, TypeError:
+        except (KeyError, TypeError):
             lua_meta = None
         if not lua_meta:
             return {
@@ -214,16 +240,8 @@ class LuaScriptWrapper(BaseUserScript):
     # argus.api — sandbox-safe functions
     # ------------------------------------------------------------------
 
-    def _install_argus_api(self, g: Any) -> None:
-        perms = set(self.METADATA.get("permissions", []))
-        api_tbl = g["argus"]["api"]
-
-        api_tbl["print"] = self._capture_print
-
-        if Permission.PROCESS_KILL in perms:
-            api_tbl["kill_process"] = self._api_kill_process
-        else:
-            api_tbl["kill_process"] = self._make_blocked("PROCESS.KILL")
+    def _api_sleep(self, ms: int) -> None:
+        self._cooldown_until = monotonic_ns() + max(0, ms) * 1_000_000
 
     def _api_kill_process(self, pid: int) -> bool:
         if self._driver is None:
@@ -239,78 +257,77 @@ class LuaScriptWrapper(BaseUserScript):
 
         return blocked
 
+    @staticmethod
+    def _format_bytes(size: int | float) -> str:
+        for unit in ("B", "K", "M", "G", "T", "P"):
+            if abs(size) < 1024:
+                return f"{size:.1f}{unit}"
+            size /= 1024
+        return f"{size:.1f}E"
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if h:
+            return f"{h}h {m}m {s}s"
+        if m:
+            return f"{m}m {s}s"
+        return f"{s}s"
+
     # ------------------------------------------------------------------
-    # Capture hooks and events
+    # Event dispatch
     # ------------------------------------------------------------------
 
-    def _capture_hooks_and_events(self, g: Any) -> None:
-        try:
-            argus_tbl = g["argus"]
-        except KeyError, TypeError:
+    def dispatch(self, event_path: str, data: Any = None) -> None:
+        """Dispatch a named event to the matching Lua callback.
+
+        Respects sleep cooldown (set via ``argus.api.sleep``).
+        """
+        if data is None:
+            data = {}
+        cb = self._callbacks.get(event_path)
+        if cb is None:
             return
-        if not argus_tbl:
+        if self._is_asleep:
             return
+        cb(self.lua.table_from(data))
 
-        try:
-            hooks_tbl = argus_tbl["hooks"]
-        except KeyError, TypeError:
-            hooks_tbl = None
-        if hooks_tbl:
-            try:
-                on_load = hooks_tbl["on_load"]
-            except KeyError, TypeError:
-                on_load = None
-            if on_load:
-                self._hooks["on_load"] = on_load
-            try:
-                on_unload = hooks_tbl["on_unload"]
-            except KeyError, TypeError:
-                on_unload = None
-            if on_unload:
-                self._hooks["on_unload"] = on_unload
-
-        try:
-            events_tbl = argus_tbl["events"]
-        except KeyError, TypeError:
-            events_tbl = None
-        if events_tbl:
-            try:
-                on_tick = events_tbl["on_tick"]
-            except KeyError, TypeError:
-                on_tick = None
-            if on_tick:
-                self._events["on_tick"] = on_tick
+    @property
+    def _is_asleep(self) -> bool:
+        if self._cooldown_until <= 0:
+            return False
+        if monotonic_ns() >= self._cooldown_until:
+            self._cooldown_until = 0
+            return False
+        return True
 
     # ------------------------------------------------------------------
-    # Driver binding
+    # Backward-compat aliases
     # ------------------------------------------------------------------
 
     def bind_driver(self, driver: BaseDriver | None) -> None:
         self._driver = driver
 
-    # ------------------------------------------------------------------
-    # Plugin interface
-    # ------------------------------------------------------------------
-
     def execute_tick(self, system_state: dict[str, Any]) -> None:
-        on_tick = self._events.get("on_tick")
-        if on_tick:
-            on_tick(self.lua.table_from(system_state))
+        """Alias — dispatches ``events.general.on_tick``."""
+        self.dispatch("events.general.on_tick", system_state)
 
     def trigger_load(self, ctx: Any) -> None:
-        on_load = self._hooks.get("on_load")
-        if on_load:
-            on_load(
-                self.lua.table_from(
-                    {"config": ctx.config, "db": ctx.db, "driver": ctx.driver}
-                )
-            )
+        from backend.core.driver_proxy import DriverProxy
+
+        perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
+        proxy = DriverProxy(self._driver, perms, meta=self.METADATA)
+        self.dispatch(
+            "lifecycle.on_load", {"config": ctx.config, "db": ctx.db, "driver": proxy}
+        )
 
     def trigger_unload(self, ctx: Any) -> None:
-        on_unload = self._hooks.get("on_unload")
-        if on_unload:
-            on_unload(
-                self.lua.table_from(
-                    {"config": ctx.config, "db": ctx.db, "driver": ctx.driver}
-                )
-            )
+        from backend.core.driver_proxy import DriverProxy
+
+        perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
+        proxy = DriverProxy(self._driver, perms, meta=self.METADATA)
+        self.dispatch(
+            "lifecycle.on_unload",
+            {"config": ctx.config, "db": ctx.db, "driver": proxy},
+        )

@@ -1,0 +1,23 @@
+QMainWindow {
+    background:#1d1d1d;
+}
+
+QWidget {
+    color:#dddddd;
+    font-size:11px;
+}
+
+QFrame {
+    background:#2b2b2b;
+    border:1px solid #555;
+}
+
+QTableView,
+QTreeView {
+    background:#242424;
+}
+
+QHeaderView::section {
+    background:#333333;
+    border:1px solid #555;
+}

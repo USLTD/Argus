@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, NotRequired, Optional, TypedDict
+from pathlib import Path
+from collections.abc import Callable
+from typing import Any, NotRequired, TypedDict
 
-from .caps import SystemCapabilities, SystemMetrics
+from .caps import StaticSystemInfo, SystemCapabilities, SystemMetrics
 from .enums import ConfidenceScore, Permission
 
 
@@ -12,7 +14,7 @@ class PluginMeta(TypedDict, total=True):
     name: str
     author: str
     version: str
-    permissions: list[Permission]
+    permissions: NotRequired[list[Permission]]
     compatible: NotRequired[list[str] | Callable[[Any], ConfidenceScore | None]]
 
 
@@ -20,7 +22,7 @@ class PluginMeta(TypedDict, total=True):
 class PluginContext:
     config: Any = None
     db: Any = None
-    driver: Optional[Any] = None
+    driver: Any | None = None
 
 
 class BasePlugin(ABC):
@@ -28,12 +30,54 @@ class BasePlugin(ABC):
 
 
 class BaseDriver(BasePlugin, ABC):
-    @abstractmethod
-    def get_capabilities(self) -> SystemCapabilities:
-        pass
+    def __init__(self) -> None:
+        self._initialized: bool = False
+        # internal setup
+        self.on_load()
+        self._initialized = True
+
+    def on_load(self) -> None:
+        """Called after driver instantiation.
+
+        Override only if you understand the driver lifecycle.
+        Default: no-op.
+        """
+
+    def on_unload(self) -> None:
+        """Called during driver disposal.
+
+        Override only if you understand the driver lifecycle.
+        Default: no-op.
+        """
+
+    def dispose(self) -> None:
+        """INTERNAL: calls on_unload(). Driver devs should not override."""
+        self.on_unload()
+
+    def __enter__(self) -> BaseDriver:
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self.dispose()
 
     @abstractmethod
-    def fetch_metrics(self) -> SystemMetrics:
+    def on_tick(self) -> SystemMetrics:
+        """Called each engine tick. Return current system metrics.
+
+        This replaces the old ``fetch_metrics``. The driver produces
+        data ONLY when the engine calls this method.
+        """
+
+    def get_static_info(self) -> StaticSystemInfo | None:
+        """Return static system information, or None if unavailable.
+
+        Override to provide motherboard, BIOS, GPU model, etc.
+        Default: returns None.
+        """
+        return None
+
+    @abstractmethod
+    def get_capabilities(self) -> SystemCapabilities:
         pass
 
     @abstractmethod
@@ -41,7 +85,24 @@ class BaseDriver(BasePlugin, ABC):
         pass
 
 
-class BaseUserScript(BasePlugin, ABC):
-    @abstractmethod
-    def execute_tick(self, system_state: dict[str, Any]) -> None:
-        pass
+class BaseUserScript(BasePlugin):
+    """Base class for user scripts (Lua, Python). Default methods are no-ops."""
+
+    file_path: Path | None = None
+    METADATA: PluginMeta | None = None
+
+    def bind_driver(self, driver: Any) -> None:
+        """Optional: receive the active driver reference."""
+
+    def trigger_load(self, ctx: Any) -> None:
+        """Optional: called when the script is activated."""
+
+    def trigger_unload(self, ctx: Any) -> None:
+        """Optional: called when the script is about to be unloaded."""
+
+    def dispatch(self, event_path: str, data: Any = None) -> None:
+        """Dispatch a named event to callbacks."""
+
+    def pop_output(self) -> list[str]:
+        """Return and clear captured output."""
+        return []

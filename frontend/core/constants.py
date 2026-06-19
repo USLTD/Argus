@@ -1,0 +1,5 @@
+APP_NAME = "ARGUS"
+
+APP_VERSION = "1.0.0"
+
+ORGANIZATION = "ARGUS Monitoring"

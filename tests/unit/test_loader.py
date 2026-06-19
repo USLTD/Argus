@@ -39,7 +39,7 @@ METADATA: PluginMeta = {
 
 class HighScore(BaseDriver):
     def get_capabilities(self): return SystemCapabilities()
-    def fetch_metrics(self):
+    def on_tick(self):
         return SystemMetrics(cpu=CPUMetrics(physical_cores=1,logical_cores=1,usage_percent=0),
                              ram=RAMMetrics(total_bytes=1,used_bytes=0,available_bytes=1,percent=0))
     def manage_process(self, pid, action, **kw): return False
@@ -63,7 +63,7 @@ METADATA: PluginMeta = {
 
 class LowScore(BaseDriver):
     def get_capabilities(self): return SystemCapabilities()
-    def fetch_metrics(self):
+    def on_tick(self):
         return SystemMetrics(cpu=CPUMetrics(physical_cores=1,logical_cores=1,usage_percent=0),
                              ram=RAMMetrics(total_bytes=1,used_bytes=0,available_bytes=1,percent=0))
     def manage_process(self, pid, action, **kw): return False
@@ -99,7 +99,7 @@ METADATA: PluginMeta = {
 
 class CustomTest(BaseDriver):
     def get_capabilities(self): return SystemCapabilities()
-    def fetch_metrics(self):
+    def on_tick(self):
         return SystemMetrics(cpu=CPUMetrics(physical_cores=1,logical_cores=1,usage_percent=0),
                              ram=RAMMetrics(total_bytes=1,used_bytes=0,available_bytes=1,percent=0))
     def manage_process(self, pid, action, **kw): return False

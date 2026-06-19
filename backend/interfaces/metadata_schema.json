@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Argus Plugin Metadata",
+  "description": "JSON Schema for validating the METADATA TypedDict in Python drivers and Lua scripts.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human-readable plugin name."
+    },
+    "author": {
+      "type": "string",
+      "description": "Author or organisation name."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+",
+      "description": "Semantic version string (e.g. 1.0.0)."
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["SCRIPT.READ_ONLY", "SYSTEM.READ", "PROCESS.KILL"]
+      },
+      "description": "Permission strings the plugin requires.",
+      "uniqueItems": true
+    },
+    "compatible": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^.+ -> (FULL|HIGH|MEDIUM|LOW|INCOMPATIBLE|TRUE|FALSE|UNKNOWN)$"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Declarative compatibility rules or null. Callable compat drivers are validated at runtime only."
+    }
+  },
+  "required": ["name", "author", "version", "permissions"],
+  "additionalProperties": false
+}
