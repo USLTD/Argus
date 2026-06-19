@@ -23,7 +23,8 @@ import re
 import sys as _sys_mod
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from .enums import ConfidenceScore
 

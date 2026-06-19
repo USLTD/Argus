@@ -7,15 +7,13 @@ dependencies = [
     "psutil==7.2.2",
     "pydantic==2.14.0a1",
     "pydantic-settings[yaml]==2.14.1",
-    "PyQt5==5.15.11",
-    "pyqtgraph>=0.14.0",
-    "qtawesome>=1.4.2",
 ]
 
-[tool.uv]
-required-environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
-
 [dependency-groups]
+gui = [
+    "PyQt6>=6.8.0",
+    "pyqtgraph>=0.13.7",
+]
 dev = [
     "basedpyright",
     "pytest>=8.0",
