@@ -1,4 +1,8 @@
-"""Permission-gated driver proxy for script contexts."""
+"""Permission-gated driver proxy for script contexts.
+
+Drivers do not have permissions — any attempt to gate access behind
+driver-specific permissions raises PermissionError.
+"""
 
 from __future__ import annotations
 
@@ -11,32 +15,28 @@ from backend.interfaces.plugins import BaseDriver, PluginMeta
 @final
 class DriverProxy:
     """
-    Wraps a driver and gates .capabilities / .metadata behind DRIVER_READ_* permissions.
+    Wraps a driver and exposes its capabilities / metadata.
 
-    Scripts access the driver via ``ctx.driver`` in lifecycle callbacks.
+    *perms* is accepted for backward compatibility with script contexts,
+    but driver permissions are no longer enforced — all driver data is
+    accessible to any script that has a driver reference.
     """
 
     __slots__ = ("_driver", "_perms", "_meta")
 
-    def __init__(self, driver: BaseDriver | None, perms: set[Permission], meta: PluginMeta | None = None) -> None:
+    def __init__(self, driver: BaseDriver | None, perms: set[Permission] | None = None, meta: PluginMeta | None = None) -> None:
         self._driver = driver
-        self._perms = perms
+        self._perms = perms or set()
         self._meta = meta
 
     @property
     def capabilities(self) -> SystemCapabilities | None:
         if self._driver is None:
             return None
-        if Permission.DRIVER_READ_CAPABILITIES not in self._perms:
-            return None
         return self._driver.get_capabilities()
 
     @property
     def metadata(self) -> PluginMeta | None:
-        if self._driver is None:
-            return None
-        if Permission.DRIVER_READ_METADATA not in self._perms:
-            return None
         return self._meta
 
     # --- passthrough for driver methods that scripts may call ---

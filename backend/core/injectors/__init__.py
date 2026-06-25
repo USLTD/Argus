@@ -153,10 +153,10 @@ class ApiInjector(HookInjector):
         current["format_bytes"] = wrapper._format_bytes
         current["format_duration"] = wrapper._format_duration
 
-        if Permission.PROCESS_KILL in perms:
+        if Permission.PROCESSES_EXECUTE in perms:
             current["kill_process"] = wrapper._api_kill_process
         else:
-            current["kill_process"] = wrapper._make_blocked("PROCESS.KILL")
+            current["kill_process"] = wrapper._make_blocked("PROCESSES.EXECUTE")
 
         return {}
 

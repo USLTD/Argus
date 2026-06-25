@@ -11,23 +11,23 @@ from PyQt6.QtWidgets import (
     QHBoxLayout
 )
 
-from PyQt6.QtCore import QTimer
-
-from frontend.core.engine_bridge import bridge
-
 
 from frontend.graphs.cpu_graph import CPUGraph
 from frontend.ui.widgets.network_widget import NetworkWidget
 
 from frontend.ui.widgets.memory_bar import MemoryBar
 
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge
 
 
 class OverviewPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__()
+
+        self._bridge: EngineBridge | None = bridge
 
 
         grid = QGridLayout(self)
@@ -45,7 +45,7 @@ class OverviewPage(QWidget):
         )
 
 
-        self.cpu = CPUGraph()
+        self.cpu = CPUGraph(bridge=self._bridge)
 
         self.cpu.setMinimumHeight(
             250
@@ -94,7 +94,7 @@ class OverviewPage(QWidget):
 
         """
 
-        core_count = bridge.get_cpu_metrics()["logical_cores"]
+        core_count = self._bridge.get_cpu_metrics()["logical_cores"]
 
         for i in range(core_count):
             row = QHBoxLayout()
@@ -151,19 +151,7 @@ class OverviewPage(QWidget):
                 temp_label
             )
 
-        self.cpu_core_timer = QTimer()
 
-        self.cpu_core_timer.timeout.connect(
-            self.update_cpu_cores
-        )
-
-        self.cpu_core_timer.start(
-            1000
-        )
-
-        self.update_cpu_cores()
-
-        core_count = bridge.get_cpu_metrics()["logical_cores"]
 
 
 
@@ -182,7 +170,7 @@ class OverviewPage(QWidget):
             memory_box
         )
 
-        self.memory_bar = MemoryBar()
+        self.memory_bar = MemoryBar(bridge=self._bridge)
 
         self.memory_bar.setMaximumHeight(
             140
@@ -300,7 +288,7 @@ class OverviewPage(QWidget):
             network_box
         )
 
-        self.network_widget = NetworkWidget()
+        self.network_widget = NetworkWidget(bridge=self._bridge)
 
         self.network_widget.setMaximumHeight(
             140
@@ -376,17 +364,7 @@ class OverviewPage(QWidget):
             self.load_handles
         )
 
-        self.load_timer = QTimer()
 
-        self.load_timer.timeout.connect(
-            self.update_system_load
-        )
-
-        self.load_timer.start(
-            1000
-        )
-
-        self.update_system_load()
 
 
 
@@ -471,32 +449,27 @@ class OverviewPage(QWidget):
 
 
         # ======================
-        # DISK TIMER
+        # SIGNAL
         # ======================
 
 
-        self.disk_timer = QTimer()
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
 
 
-        self.disk_timer.timeout.connect(
-            self.update_disks
-        )
 
-
-        self.disk_timer.start(
-            1000
-        )
-
-
+    def _on_state(self, ctx: BridgeContext) -> None:
+        """Handle unified state update from EngineBridge signal."""
+        self.update_cpu_cores()
+        self.update_system_load()
         self.update_disks()
-
-
+        self.update_processes()
 
     def update_disks(self):
 
         try:
 
-            c = bridge.get_disk_usage(
+            c = self._bridge.get_disk_usage(
                 "C:\\"
             )
 
@@ -519,7 +492,7 @@ class OverviewPage(QWidget):
 
         try:
 
-            d = bridge.get_disk_usage(
+            d = self._bridge.get_disk_usage(
                 "D:\\"
             )
 
@@ -542,13 +515,13 @@ class OverviewPage(QWidget):
 
     def update_cpu_cores(self):
 
-        usage = bridge.get_cpu_metrics()["per_core"] or []
+        usage = self._bridge.get_cpu_metrics()["per_core"] or []
 
         temperatures = []
 
         try:
 
-            sensors = bridge.get_sensors()
+            sensors = self._bridge.get_sensors()
 
             if sensors:
 
@@ -590,10 +563,10 @@ class OverviewPage(QWidget):
 
     def update_system_load(self):
 
-        load = bridge.get_system_load()
+        load = self._bridge.get_system_load()
         cpu = load["cpu_percent"]
 
-        freq = bridge.get_cpu_metrics()["frequency"]
+        freq = self._bridge.get_cpu_metrics()["frequency"]
 
         processes = load["processes"]
 
@@ -657,25 +630,13 @@ class OverviewPage(QWidget):
             True
         )
 
-        self.update_processes()
 
-        # update every 2 seconds
-
-        self.process_timer = QTimer()
-
-        self.process_timer.timeout.connect(
-            self.update_processes
-        )
-
-        self.process_timer.start(
-            2000
-        )
 
     def update_processes(self):
 
         processes = []
 
-        for proc in bridge.get_process_list():
+        for proc in self._bridge.get_process_list():
 
             try:
 

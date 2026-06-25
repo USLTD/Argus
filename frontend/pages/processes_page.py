@@ -1,7 +1,3 @@
-from PyQt6.QtCore import QTimer, Qt
-
-from frontend.core.engine_bridge import bridge
-
 from PyQt6.QtGui import QShortcut, QKeySequence
 
 from PyQt6.QtWidgets import (
@@ -15,16 +11,19 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QLabel,
     QMessageBox,
-    QComboBox
 )
 
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge
 
 
 class ProcessesPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__()
+
+        self._bridge: EngineBridge | None = bridge
 
 
         layout = QVBoxLayout(self)
@@ -182,22 +181,12 @@ class ProcessesPage(QWidget):
 
 
         # ======================
-        # TIMER
+        # SIGNAL
         # ======================
 
 
-        self.timer = QTimer()
-
-        self.timer.timeout.connect(
-            self.load_processes
-        )
-
-
-        self.timer.start(
-            3000
-        )
-
-
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
 
         self.load_processes()
 
@@ -257,12 +246,15 @@ class ProcessesPage(QWidget):
     # ======================
 
 
+    def _on_state(self, ctx: BridgeContext) -> None:
+        self.load_processes()
+
     def load_processes(self):
 
         self.process_data.clear()
 
 
-        for proc in bridge.get_process_list():
+        for proc in self._bridge.get_process_list():
 
             try:
 
@@ -411,7 +403,7 @@ class ProcessesPage(QWidget):
 
             try:
 
-                bridge.terminate_process(
+                self._bridge.terminate_process(
                     pid
                 )
 
@@ -440,7 +432,7 @@ class ProcessesPage(QWidget):
 
             try:
 
-                bridge.kill_process(
+                self._bridge.kill_process(
                     pid
                 )
 

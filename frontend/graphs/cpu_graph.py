@@ -1,41 +1,28 @@
-from PyQt6.QtCore import QTimer
-
-from frontend.core.engine_bridge import bridge
 from frontend.graphs.base_graph import BaseGraph
 
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge
 
 
 class CPUGraph(BaseGraph):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__(
             "CPU Usage %"
         )
 
+        self._bridge: EngineBridge | None = bridge
 
-        # Initialize cpu counter
-        bridge.get_cpu_metrics()
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
 
-
-
-        self.timer = QTimer()
-
-
-        self.timer.timeout.connect(
-            self.refresh
-        )
-
-
-        self.timer.start(
-            1000
-        )
-
-
+    def _on_state(self, ctx: BridgeContext) -> None:
+        self.refresh()
 
     def refresh(self):
 
-        cpu = bridge.get_cpu_metrics()["cpu_percent"]
+        cpu = self._bridge.get_cpu_metrics()["cpu_percent"]
 
 
         self.update_value(

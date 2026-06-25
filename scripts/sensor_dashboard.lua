@@ -18,7 +18,9 @@ METADATA = {
 
 local tick_count = 0
 
-argus.events.sensor.on_tick = function(sensors)
+argus.events.sensor.on_tick = function(ctx)
+    if not ctx then return end
+    local sensors = ctx["data"]
     if not sensors or #sensors == 0 then return end
     tick_count = tick_count + 1
     if tick_count < 6 then return end

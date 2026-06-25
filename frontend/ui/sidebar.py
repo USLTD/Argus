@@ -28,7 +28,7 @@ class Sidebar(QListWidget):
         self.setMaximumWidth(220)
         self.setIconSize(QSize(28, 28))
 
-        self.items = []
+        self._page_items: list[QListWidgetItem] = []
 
 
         for name, icon_path in self.PAGES:
@@ -43,7 +43,7 @@ class Sidebar(QListWidget):
 
             self.addItem(item)
 
-            self.items.append(item)
+            self._page_items.append(item)
 
 
 
@@ -61,7 +61,7 @@ class Sidebar(QListWidget):
 
         self.setMaximumWidth(70)
 
-        for item in self.items:
+        for item in self._page_items:
             item.setText("")
 
         self.expanded = False
@@ -72,7 +72,7 @@ class Sidebar(QListWidget):
 
         self.setMaximumWidth(220)
 
-        for item, page in zip(self.items, self.PAGES):
+        for item, page in zip(self._page_items, self.PAGES):
             item.setText(page[0])
 
         self.expanded = True

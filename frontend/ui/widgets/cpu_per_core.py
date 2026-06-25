@@ -6,19 +6,22 @@ from PyQt6.QtWidgets import (
     QProgressBar
 )
 
-from frontend.core.engine_bridge import bridge
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge
 
 
 class CPUPerCoreWidget(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
         super().__init__()
 
-        self.layout = QVBoxLayout(self)
+        self._bridge: EngineBridge | None = bridge
+
+        self._core_layout = QVBoxLayout(self)  # type: ignore[assignment]
 
         self.rows = []
 
-        cores = bridge.get_cpu_metrics()["logical_cores"]
+        cores = self._bridge.get_cpu_metrics()["logical_cores"] if self._bridge else 0
 
         for i in range(cores):
 
@@ -40,7 +43,7 @@ class CPUPerCoreWidget(QWidget):
             row.addWidget(avg_label)
             row.addWidget(temp_label)
 
-            self.layout.addLayout(row)
+            self._core_layout.addLayout(row)
 
             self.rows.append(
                 (
@@ -51,11 +54,15 @@ class CPUPerCoreWidget(QWidget):
                 )
             )
 
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
+
+    def _on_state(self, ctx: BridgeContext) -> None:
         self.update_stats()
 
     def update_stats(self):
 
-        usage = bridge.get_cpu_metrics()["per_core"] or []
+        usage = self._bridge.get_cpu_metrics()["per_core"] or []
 
         for i, value in enumerate(usage):
 

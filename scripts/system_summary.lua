@@ -26,8 +26,9 @@ function argus.lifecycle.on_unload(ctx)
     print("[Summary] Shutting down")
 end
 
-function argus.events.general.on_tick(state)
+function argus.events.general.on_tick(ctx)
     tick_count = tick_count + 1
+    local state = ctx["data"]
     local cpu = state["cpu"]
     local ram = state["ram"]
     local gpu = state["gpu"]

@@ -2,11 +2,8 @@ import platform
 import socket
 import getpass
 import datetime
-import cpuinfo
-import wmi
-
-from frontend.core.engine_bridge import bridge
-
+import cpuinfo  # type: ignore[import-untyped]
+import wmi  # type: ignore[import-untyped]
 
 from PyQt6.QtWidgets import (
     QWidget,
@@ -14,16 +11,18 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QLabel,
     QGridLayout,
-    QScrollArea
+    QScrollArea,
 )
-
+from frontend.core.engine_bridge import EngineBridge
 
 
 class SystemPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__()
+
+        self._bridge: EngineBridge | None = bridge
 
 
         scroll = QScrollArea()
@@ -80,7 +79,7 @@ class SystemPage(QWidget):
 
 
         boot = datetime.datetime.fromtimestamp(
-            bridge.get_boot_time()
+            self._bridge.get_boot_time()
         )
 
 
@@ -145,7 +144,7 @@ class SystemPage(QWidget):
         cpu = cpuinfo.get_cpu_info()
 
 
-        freq = bridge.get_cpu_metrics()["frequency"]
+        freq = self._bridge.get_cpu_metrics()["frequency"]
 
 
 
@@ -159,11 +158,11 @@ class SystemPage(QWidget):
 
 
             "Physical Cores":
-            bridge.get_cpu_metrics()["physical_cores"],
+            self._bridge.get_cpu_metrics()["physical_cores"],
 
 
             "Logical Cores":
-            bridge.get_cpu_metrics()["logical_cores"],
+            self._bridge.get_cpu_metrics()["logical_cores"],
 
 
             "Frequency":
@@ -173,7 +172,7 @@ class SystemPage(QWidget):
 
 
             "Current Usage":
-            f"{bridge.get_cpu_metrics()['cpu_percent']}%"
+            f"{self._bridge.get_cpu_metrics()['cpu_percent']}%"
 
         }
 
@@ -204,7 +203,7 @@ class SystemPage(QWidget):
 
 
 
-        mem = bridge.get_memory_metrics()
+        mem = self._bridge.get_memory_metrics()
 
 
 
@@ -404,13 +403,13 @@ class SystemPage(QWidget):
 
 
 
-        for disk in bridge.get_disk_partitions():
+        for disk in self._bridge.get_disk_partitions():
 
 
             try:
 
 
-                usage = bridge.get_disk_usage(
+                usage = self._bridge.get_disk_usage(
                     disk["mountpoint"]
                 )
 
@@ -469,7 +468,7 @@ class SystemPage(QWidget):
 
 
 
-        for name, addresses in bridge.get_network_interfaces().items():
+        for name, addresses in self._bridge.get_network_interfaces().items():
 
 
             grid.addWidget(
@@ -479,7 +478,7 @@ class SystemPage(QWidget):
             )
 
 
-            for addr in addresses:
+            for addr in addresses:  # type: ignore[union-attr]
 
 
                 if addr.address:
@@ -522,7 +521,7 @@ class SystemPage(QWidget):
 
 
 
-        battery = bridge.get_battery()
+        battery = self._bridge.get_battery()
 
 
 

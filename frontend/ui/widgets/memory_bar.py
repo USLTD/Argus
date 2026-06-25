@@ -1,4 +1,3 @@
-from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
     QWidget,
     QLabel,
@@ -6,14 +5,17 @@ from PyQt6.QtWidgets import (
     QVBoxLayout
 )
 
-from frontend.core.engine_bridge import bridge
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge
 
 
 class MemoryBar(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__()
+
+        self._bridge: EngineBridge | None = bridge
 
         layout = QVBoxLayout(self)
 
@@ -74,23 +76,16 @@ class MemoryBar(QWidget):
         layout.addWidget(self.free_bar)
 
 
-
-        self.timer = QTimer()
-
-        self.timer.timeout.connect(
-            self.refresh
-        )
-
-        self.timer.start(1000)
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
 
 
+    def _on_state(self, ctx: BridgeContext) -> None:
         self.refresh()
-
-
 
     def refresh(self):
 
-        mem = bridge.get_memory_metrics()
+        mem = self._bridge.get_memory_metrics()
 
         total = mem["total"]
 

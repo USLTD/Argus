@@ -21,10 +21,15 @@ import os
 import platform as _platform_mod
 import re
 import sys as _sys_mod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from types import ModuleType
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from backend.interfaces.caps import StaticSystemInfo
+    from backend.storage.config import ArgusConfig
 
 from .enums import ConfidenceScore
 
@@ -66,11 +71,11 @@ _AND_OR_RE = re.compile(r"\s+(AND|OR)\s+")
 # Resolved context values  (flat identifier → value)
 # ---------------------------------------------------------------------------
 
-_IDENTIFIER_LAMBDA_MAP: dict[str, Callable[[CompatContext], Any]] = {}
+_IDENTIFIER_LAMBDA_MAP: dict[str, Callable[[str, CompatContext], object]] = {}
 
 
-def _reg(name: str) -> Callable:
-    def deco(fn: Callable[[CompatContext], Any]) -> Callable:
+def _reg(name: str) -> Callable[[Callable[[str, CompatContext], object]], Callable[[str, CompatContext], object]]:
+    def deco(fn: Callable[[str, CompatContext], object]) -> Callable[[str, CompatContext], object]:
         _IDENTIFIER_LAMBDA_MAP[name] = fn
         return fn
 
@@ -149,76 +154,76 @@ def build_compat_context() -> CompatContext:
 
 
 @_reg("sys.platform")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.sys.platform
 
 
 @_reg("sys.maxsize")
-def _(_: Any, ctx: CompatContext) -> int:
+def _(_: str, ctx: CompatContext) -> int:
     return ctx.sys.maxsize
 
 
 @_reg("sys.byteorder")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.sys.byteorder
 
 
 @_reg("sys.version")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.sys.version
 
 
 @_reg("platform.system")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.system
 
 
 @_reg("platform.machine")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.machine
 
 
 @_reg("platform.release")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.release
 
 
 @_reg("platform.version")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.version
 
 
 @_reg("platform.python_version")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.python_version
 
 
 @_reg("platform.python_implementation")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.python_implementation
 
 
 @_reg("platform.processor")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.processor
 
 
 @_reg("platform.arch_bits")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.platform.arch_bits
 
 
 @_reg("os.name")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.os.name
 
 
 @_reg("os.sep")
-def _(_: Any, ctx: CompatContext) -> str:
+def _(_: str, ctx: CompatContext) -> str:
     return ctx.os.sep
 
 
-def _resolve_identifier(ident: str, ctx: CompatContext) -> Any:
+def _resolve_identifier(ident: str, ctx: CompatContext) -> object:
     fn = _IDENTIFIER_LAMBDA_MAP.get(ident)
     if fn is None:
         raise ValueError(f"Unknown identifier '{ident}' in compatibility rule")
@@ -353,3 +358,116 @@ def evaluate_script_compatible(
     if label == "UNKNOWN":
         return None
     return None
+
+
+# ---------------------------------------------------------------------------
+# RuleContext — typed context for script/driver rule evaluation
+# ---------------------------------------------------------------------------
+
+
+class RuleContext(TypedDict, total=False):
+    """Context passed to :class:`Rule` and :class:`RuleEvaluator` callables."""
+
+    script_name: str
+    system_info: StaticSystemInfo | None
+    config: ArgusConfig | None
+
+
+@dataclass
+class EvaluationResult:
+    """Result of evaluating a collection of rules."""
+
+    passed: bool
+    reason: str = ""
+
+
+class Rule(ABC):
+    """A single compatibility rule evaluated against a :class:`RuleContext`."""
+
+    @abstractmethod
+    def __call__(self, ctx: RuleContext) -> bool:
+        """Return ``True`` if the rule passes for the given context."""
+
+
+class RuleEvaluator(ABC):
+    """Evaluates a set of :class:`Rule` objects against a :class:`RuleContext`."""
+
+    @abstractmethod
+    def evaluate(self, rules: list[Rule], ctx: RuleContext) -> EvaluationResult:
+        """Evaluate all *rules* and return the aggregated result."""
+
+
+class RuleCondition(ABC):
+    """Evaluates a declarative rule string against a :class:`RuleContext`."""
+
+    @abstractmethod
+    def evaluate(self, rule_str: str, ctx: RuleContext) -> bool:
+        """Return ``True`` if *rule_str* matches *ctx*."""
+
+
+def evaluate_rule(rule_str: str, context: dict[str, object]) -> bool:
+    """Evaluate a single declarative rule string against a plain dict context.
+
+    This is a lightweight entry point for ad-hoc evaluation outside the
+    :class:`CompatContext` / :class:`RuleContext` machinery.
+    """
+    m = _RULE_RE.match(rule_str)
+    if not m:
+        return False
+    expr = m.group("expr")
+    tokens = _AND_OR_RE.split(expr.strip())
+    result: bool | None = None
+    expect_and = True
+
+    for token in tokens:
+        token = token.strip()
+        if token == "AND":
+            expect_and = True
+            continue
+        if token == "OR":
+            expect_and = False
+            continue
+
+        cm = _COMP_RE.match(token)
+        if not cm:
+            return False
+
+        ident = cm.group("ident")
+        op = cm.group("op")
+        raw_value = cm.group("value")
+        expected = raw_value[1:-1]
+        actual = context.get(ident)
+        if actual is None:
+            return False
+
+        op_key = _OPERATORS[op]
+        comp_result: bool
+        if op_key == "eq":
+            comp_result = str(actual) == expected
+        elif op_key == "ne":
+            comp_result = str(actual) != expected
+        elif op_key == "gt":
+            comp_result = str(actual) > expected
+        elif op_key == "lt":
+            comp_result = str(actual) < expected
+        elif op_key == "ge":
+            comp_result = str(actual) >= expected
+        elif op_key == "le":
+            comp_result = str(actual) <= expected
+        elif op_key == "like":
+            comp_result = fnmatch.fnmatch(str(actual), expected)
+        elif op_key == "startswith":
+            comp_result = str(actual).startswith(expected)
+        elif op_key == "endswith":
+            comp_result = str(actual).endswith(expected)
+        else:
+            return False
+
+        if result is None:
+            result = comp_result
+        elif expect_and:
+            result = result and comp_result
+        else:
+            result = result or comp_result
+
+    return bool(result)

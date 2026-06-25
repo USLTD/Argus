@@ -116,15 +116,15 @@
 ---   name = "my-script",
 ---   author = "You",
 ---   version = "1.0.0",
----   permissions = { "SCRIPT.READ_ONLY" },
+---   permissions = { "SCRIPT.READ" },
 ---   compatible = { "TRUE -> TRUE" }
 --- }
 --- ```
 ---
 --- Available permissions:
----   SCRIPT.READ_ONLY — lifecycle + general/cpu/memory events
----   SYSTEM.READ     — adds disk/net/process/gpu/battery/sensor events
----   PROCESS.KILL    — enables argus.api.kill_process()
+---   SCRIPT.READ         — lifecycle + general/cpu/memory events
+---   SYSTEM.READ         — adds disk/net/process/gpu/battery/sensor events
+---   PROCESSES.EXECUTE   — enables argus.api.kill_process()
 ---
 --- @module argus
 argus = {}

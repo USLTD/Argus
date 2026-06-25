@@ -44,14 +44,14 @@ METADATA = {
     name = "Test Script",
     author = "Tester",
     version = "1.0",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
     compatible = {
         "platform.system LIKE '*' -> TRUE",
     }
 }
 
-argus.events.on_tick = function(state)
-    print("tick received, cpu=" .. state["cpu"]["usage_percent"])
+argus.events.general.on_tick = function(ctx)
+    print("tick received, cpu=" .. ctx["data"]["cpu"]["usage_percent"])
 end
 """
     )

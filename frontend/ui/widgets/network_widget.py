@@ -3,18 +3,21 @@ from PyQt6.QtWidgets import (
     QVBoxLayout
 )
 
-from PyQt6.QtCore import QTimer
-
-from frontend.core.engine_bridge import bridge
 from frontend.graphs.base_graph import BaseGraph
 
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge, NetworkIODict
 
 
 class NetworkWidget(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__()
+
+        self._bridge: EngineBridge | None = bridge
+
+        self.old: NetworkIODict = self._bridge.get_network_io()
 
 
         layout = QVBoxLayout(self)
@@ -55,25 +58,17 @@ class NetworkWidget(QWidget):
 
 
 
-        self.old = bridge.get_network_io()
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
 
 
 
-        self.timer = QTimer()
-
-        self.timer.timeout.connect(
-            self.update_network
-        )
-
-        self.timer.start(
-            1000
-        )
-
-
+    def _on_state(self, ctx: BridgeContext) -> None:
+        self.update_network()
 
     def update_network(self):
 
-        new = bridge.get_network_io()
+        new = self._bridge.get_network_io()
 
 
 

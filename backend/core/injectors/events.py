@@ -1,14 +1,14 @@
 """Subsystem event injectors.
 
 Permission gating:
-* ``SCRIPT.READ_ONLY`` — general, cpu, memory
+* ``SCRIPT.READ`` — general, cpu, memory
 * ``SYSTEM.READ`` — disk, net, process, gpu, battery, sensor
 """
 
 from backend.interfaces.enums import Permission
 from backend.core.injectors import EventInjector
 
-_RO = Permission.SCRIPT_READ_ONLY
+_RO = Permission.SCRIPT_READ
 _SR = Permission.SYSTEM_READ
 
 

@@ -20,7 +20,9 @@ class TestSmoke:
         for _ in range(3):
             state = engine.get_system_state()
             assert "error" not in state, state["error"]
-            assert state["cpu"]["usage_percent"] is not None
-            assert state["ram"]["percent"] is not None
+            cpu_metrics = state["cpu"].get("metrics", [{}])
+            ram_metrics = state["ram"].get("metrics", [{}])
+            assert cpu_metrics[0].get("usage_percent") is not None
+            assert ram_metrics[0].get("percent") is not None
 
         db.close()

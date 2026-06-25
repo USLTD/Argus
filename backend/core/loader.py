@@ -6,13 +6,17 @@ import ast
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, TypeVar
 
 from backend.core.python_script import PythonScriptWrapper
 from backend.core.sandbox import LuaScriptWrapper
 from backend.interfaces.enums import CompatAction, ConfidenceScore
-from backend.interfaces.plugins import BaseDriver, PluginMeta
-from backend.interfaces.rules import evaluate_compatible, evaluate_script_compatible
+from backend.interfaces.plugins import BaseDriver, BaseUserScript, PluginMeta
+from backend.interfaces.rules import CompatContext, evaluate_compatible, evaluate_script_compatible
+from backend.storage.config import ArgusConfig
+
+T = TypeVar("T", bound=BaseDriver)
 
 
 class DriverCandidate:
@@ -37,10 +41,10 @@ class DiscoveryLoader:
     def __init__(self, plugins_dir: str = ".") -> None:
         self.root_dir = Path(plugins_dir)
         self.active_driver: BaseDriver | None = None
-        self.active_scripts: list[Any] = []
+        self.active_scripts: list[BaseUserScript] = []
         self.all_candidates: list[DriverCandidate] = []
 
-    def soft_reload(self, compat_ctx: Any = None, config: Any = None) -> None:
+    def soft_reload(self, compat_ctx: CompatContext | None = None, config: ArgusConfig | None = None) -> None:
         """Flush cache and reload highest-ranked driver and all compatible scripts."""
         self.active_scripts.clear()
         self.all_candidates.clear()
@@ -82,7 +86,7 @@ class DiscoveryLoader:
                 if not meta:
                     continue
 
-                score = evaluate_compatible(meta.get("compatible"), compat_ctx)
+                score = evaluate_compatible(meta.get("compatible"), compat_ctx)  # type: ignore[arg-type]
                 if not isinstance(score, ConfidenceScore):
                     score = ConfidenceScore.INCOMPATIBLE
 
@@ -136,7 +140,7 @@ class DiscoveryLoader:
 
     def _import_driver_module(
         self, file_path: Path
-    ) -> tuple[Any, type[BaseDriver]] | None:
+    ) -> tuple[ModuleType, type[BaseDriver]] | None:
         if file_path.name == "__init__.py":
             module_name = f"dynamic_driver_{file_path.parent.name}"
         else:

@@ -4,7 +4,7 @@ METADATA = {
     name = "Top Process Reporter",
     author = "Core Team",
     version = "1.0.0",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
     compatible = {
         "sys.platform EQ 'win32' -> TRUE",
         "sys.platform EQ 'linux' -> TRUE",
@@ -14,7 +14,10 @@ METADATA = {
 
 local tick_count = 0
 
-argus.events.on_tick = function(state)
+argus.events.on_tick = function(ctx)
+    if not ctx then return end
+    local state = ctx["data"]
+    if not state then return end
     tick_count = tick_count + 1
     if tick_count < 5 then return end
     tick_count = 0

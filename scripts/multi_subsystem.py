@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import argus
+
+if TYPE_CHECKING:
+    from backend.interfaces.contexts import (
+        CpuTickData, GeneralTickData, MemoryTickData, ScriptContext,
+    )
 
 METADATA: argus.script.Metadata = {
     "name": "Multi-Subsystem Reporter",
@@ -17,22 +24,23 @@ METADATA: argus.script.Metadata = {
 }
 
 
-cpu_data = {}
-ram_data = {}
+cpu_data: dict[str, float] = {}
+ram_data: dict[str, float] = {}
 
 
-@argus.events.cpu.on_tick
-def on_cpu(data):
-    cpu_data["percent"] = data["usage_percent"]
+@argus.events.cpu.on_tick  # type: ignore[arg-type]
+def on_cpu(ctx: ScriptContext[CpuTickData]) -> None:
+    cpu_data["percent"] = ctx.data["usage_percent"]
 
 
-@argus.events.memory.on_tick
-def on_memory(data):
-    ram_data["percent"] = data["percent"]
+@argus.events.memory.on_tick  # type: ignore[arg-type]
+def on_memory(ctx: ScriptContext[MemoryTickData]) -> None:
+    ram_data["percent"] = ctx.data["percent"]
 
 
-@argus.events.general.on_tick
-def on_tick(state):
+@argus.events.general.on_tick  # type: ignore[arg-type]
+def on_tick(ctx: ScriptContext[GeneralTickData]) -> None:
+    state = ctx.data
     parts = []
     parts.append(f"CPU {state['cpu']['usage_percent']:.1f}%")
     parts.append(f"RAM {state['ram']['percent']:.1f}%")

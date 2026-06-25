@@ -1,10 +1,17 @@
 """Tests for PythonScriptWrapper."""
 
 from pathlib import Path
+from typing import Any
 
 
 from backend.core.python_script import PythonScriptWrapper
+from backend.interfaces.contexts import ScriptContext
 from backend.interfaces.plugins import PluginMeta
+
+
+def _script_ctx() -> ScriptContext[Any]:
+    """Minimal ScriptContext for tests that don't need driver/config/db."""
+    return ScriptContext[Any](data=None, config=None, db=None, driver=None)
 
 
 class TestPythonScriptWrapper:
@@ -19,10 +26,10 @@ def setup(ctx):
     print("loaded!")
 
 @argus.events.cpu.on_tick
-def on_cpu(data):
-    print(f"CPU: {data['usage_percent']}%")
+def on_cpu(ctx):
+    print(f"CPU: {ctx.data['usage_percent']}%")
 
-argus.events.memory.on_tick = lambda data: print(f"MEM: {data['percent']}%")
+argus.events.memory.on_tick = lambda ctx: print(f"MEM: {ctx.data['percent']}%")
 """
         )
         meta: PluginMeta = {
@@ -37,7 +44,7 @@ argus.events.memory.on_tick = lambda data: print(f"MEM: {data['percent']}%")
         assert wrapper.pop_output() == []
 
         # trigger_load should exec and capture lifecycle callback output
-        wrapper.trigger_load(None)
+        wrapper.trigger_load(_script_ctx())
         output = wrapper.pop_output()
         assert "loaded!" in output
 
@@ -69,7 +76,7 @@ def setup(ctx):
             "permissions": [],
         }
         wrapper = PythonScriptWrapper(script_path, meta)
-        wrapper.trigger_load(None)
+        wrapper.trigger_load(_script_ctx())
         assert wrapper.pop_output() == ["hello"]
         assert wrapper.pop_output() == []
 
@@ -89,7 +96,7 @@ x = 42
             "permissions": [],
         }
         wrapper = PythonScriptWrapper(script_path, meta)
-        wrapper.trigger_load(None)  # should not raise
+        wrapper.trigger_load(_script_ctx())  # should not raise
         wrapper.dispatch("events.cpu.on_tick", {})  # should not raise
 
     def test_print_captured(self, tmp_path: Path) -> None:
@@ -99,7 +106,7 @@ x = 42
 import argus
 
 @argus.events.general.on_tick
-def on_tick(state):
+def on_tick(ctx):
     print("direct")
     argus.api.print("via api")
 """
@@ -111,7 +118,7 @@ def on_tick(state):
             "permissions": [],
         }
         wrapper = PythonScriptWrapper(script_path, meta)
-        wrapper.trigger_load(None)
+        wrapper.trigger_load(_script_ctx())
         # trigger_load captured the print from on_load (none), now dispatch
         wrapper.pop_output()  # clear load output
         wrapper.dispatch("events.general.on_tick", {})

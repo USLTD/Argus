@@ -14,7 +14,7 @@ Every Python driver and script module **must** define::
         "name": "my-plugin",
         "author": "You",
         "version": "1.0.0",
-        "permissions": [Permission.SCRIPT_READ_ONLY],
+        "permissions": [Permission.SCRIPT_READ],
     }
 
 Drivers additionally **must** define::
@@ -45,9 +45,29 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, NotRequired, TypedDict
 
-from .caps import StaticSystemInfo, SystemCapabilities, SystemMetrics
+if TYPE_CHECKING:
+    from backend.interfaces.contexts import DriverContext, ScriptContext
+    from backend.storage.config import ArgusConfig as _ArgusConfig
+    from backend.storage.database import DatabaseManager as _DatabaseManager
+
+from .caps import (
+    BatteryMetric,
+    CPUMetric,
+    GPUMetric,
+    MemoryMetric,
+    MetricMetadata,
+    MetricsCollection,
+    NetworkMetric,
+    ProcessMetric,
+    SensorMetric,
+    StaticSystemInfo,
+    StorageMetric,
+    SystemCapabilities,
+    SystemMetrics,
+)
+from backend.interfaces.sentinels import TickSnapshot, Unavailable
 from .enums import ConfidenceScore, Permission
 
 
@@ -78,11 +98,11 @@ class PluginMeta(TypedDict, total=True):
     permissions: NotRequired[list[Permission]]
     """List of :class:`Permission` values the plugin requires."""
 
-    compatible: NotRequired[list[str] | Callable[[Any], ConfidenceScore | None]]
+    compatible: NotRequired[list[str] | Callable[[SystemCapabilities], ConfidenceScore | None]]
     """Optional compatibility rules.
 
     * Declarative: ``["sys.platform EQ 'win32' -> FULL"]``
-    * Callable (drivers only): ``Callable[[CompatContext], ConfidenceScore | None]``
+    * Callable (drivers only): ``Callable[[SystemCapabilities], ConfidenceScore | None]``
     """
 
 
@@ -90,13 +110,13 @@ class PluginMeta(TypedDict, total=True):
 class PluginContext:
     """Runtime context passed to lifecycle hooks."""
 
-    config: Any = None
+    argus_config: _ArgusConfig | None = None
     """Application config object."""
 
-    db: Any = None
+    db: _DatabaseManager | None = None
     """Database manager instance (or ``None``)."""
 
-    driver: Any = None
+    driver: BaseDriver | None = None
     """Active hardware driver instance (or ``None``)."""
 
 
@@ -116,10 +136,10 @@ class BaseDriver(BasePlugin, ABC):
 
     def __init__(self) -> None: ...
 
-    def on_load(self) -> None:
+    def on_load(self, ctx: DriverContext | None = None) -> None:
         """Called after driver instantiation. Default: no-op."""
 
-    def on_unload(self) -> None:
+    def on_unload(self, ctx: DriverContext | None = None) -> None:
         """Called during driver disposal. Default: no-op."""
 
     def dispose(self) -> None:
@@ -127,14 +147,42 @@ class BaseDriver(BasePlugin, ABC):
 
     def __enter__(self) -> BaseDriver: ...
 
-    def __exit__(self, *args: Any) -> None: ...
+    def __exit__(self, *args: object) -> None: ...
+
+    def tick(self, ctx: DriverContext) -> TickSnapshot:
+        """Called each engine tick. Aggregate subsystem data into TickSnapshot."""
 
     @abstractmethod
-    def on_tick(self) -> SystemMetrics:
-        """Called each engine tick. Return current system metrics.
+    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric] | Unavailable:
+        """CPU usage, core counts."""
 
-        This replaces the old ``fetch_metrics``.
-        """
+    @abstractmethod
+    def tick_memory(self, ctx: DriverContext) -> MetricsCollection[MemoryMetric] | Unavailable:
+        """RAM total, used, available, percent."""
+
+    @abstractmethod
+    def tick_processes(self, ctx: DriverContext) -> MetricsCollection[ProcessMetric] | Unavailable:
+        """Snapshot of running processes."""
+
+    @abstractmethod
+    def tick_disk(self, ctx: DriverContext) -> MetricsCollection[StorageMetric] | Unavailable:
+        """Per-mount-point disk usage."""
+
+    @abstractmethod
+    def tick_network(self, ctx: DriverContext) -> MetricsCollection[NetworkMetric] | Unavailable:
+        """Per-interface network I/O counters."""
+
+    @abstractmethod
+    def tick_gpu(self, ctx: DriverContext) -> MetricsCollection[GPUMetric] | Unavailable:
+        """Per-GPU metrics."""
+
+    @abstractmethod
+    def tick_sensors(self, ctx: DriverContext) -> MetricsCollection[SensorMetric] | Unavailable:
+        """Temperature/voltage/fan sensors."""
+
+    @abstractmethod
+    def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
+        """Battery charge, status."""
 
     def get_static_info(self) -> StaticSystemInfo | None:
         """Return static system information, or None if unavailable.
@@ -167,13 +215,13 @@ class BaseUserScript:
     METADATA: PluginMeta | None
     """Cached metadata dict extracted from the script."""
 
-    def bind_driver(self, driver: Any) -> None:
+    def bind_driver(self, driver: BaseDriver | None) -> None:
         """Optional: receive the active driver reference."""
 
-    def trigger_load(self, ctx: Any) -> None:
+    def trigger_load(self, ctx: ScriptContext[None]) -> None:
         """Optional: called when the script is activated."""
 
-    def trigger_unload(self, ctx: Any) -> None:
+    def trigger_unload(self, ctx: ScriptContext[None]) -> None:
         """Optional: called when the script is about to be unloaded."""
 
     def dispatch(self, event_path: str, data: Any = None) -> None:

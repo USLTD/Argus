@@ -23,7 +23,9 @@ function argus.lifecycle.on_load(ctx)
     print(string.format("[ProcWatch] Monitoring processes > %.0f%% CPU", cpu_threshold))
 end
 
-argus.events.process.on_tick = function(processes)
+argus.events.process.on_tick = function(ctx)
+    if not ctx then return end
+    local processes = ctx["data"]
     if not processes then return end
     for _, p in ipairs(processes) do
         local pid = p["pid"]

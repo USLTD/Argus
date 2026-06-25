@@ -62,10 +62,10 @@ class TestInjectorRegistry:
     def test_event_injector_permission_gating(self) -> None:
         reset_injectors()
         ro_inj = EventInjector(
-            "perm.a", ["on_tick"], permission=Permission.SCRIPT_READ_ONLY
+            "perm.a", ["on_tick"], permission=Permission.SCRIPT_READ
         )
         sr_inj = EventInjector("perm.b", ["on_tick"], permission=Permission.SYSTEM_READ)
-        assert ro_inj.permission == Permission.SCRIPT_READ_ONLY
+        assert ro_inj.permission == Permission.SCRIPT_READ
         assert sr_inj.permission == Permission.SYSTEM_READ
 
     def test_api_injector_no_permission(self) -> None:
@@ -126,6 +126,6 @@ class TestEventInjector:
 
         wrapper = types.SimpleNamespace()
         callbacks = inj.capture_or_install(
-            lua, argus_tbl, wrapper, {Permission.SCRIPT_READ_ONLY}
+            lua, argus_tbl, wrapper, {Permission.SCRIPT_READ}
         )
         assert callbacks == {}

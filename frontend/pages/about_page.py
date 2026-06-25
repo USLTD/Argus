@@ -11,7 +11,7 @@ from PyQt6.QtCore import QT_VERSION_STR
 
 class AboutPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge=None):
 
         super().__init__()
 

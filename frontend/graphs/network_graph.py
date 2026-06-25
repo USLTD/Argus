@@ -1,36 +1,35 @@
-from PyQt6.QtCore import QTimer
-
-from frontend.core.engine_bridge import bridge
 from frontend.graphs.base_graph import BaseGraph
+
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge, NetworkIODict
 
 
 class NetworkGraph(BaseGraph):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__(
             "Network Activity (MB/s)"
         )
 
-        self.old_data = bridge.get_network_io()
+        self._bridge: EngineBridge | None = bridge
+
+        self.old_data: NetworkIODict = self._bridge.get_network_io()
 
         self.graph.setYRange(
             0,
             10
         )
 
-        self.timer = QTimer()
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
 
-        self.timer.timeout.connect(
-            self.refresh
-        )
-
-        self.timer.start(1000)
-
+    def _on_state(self, ctx: BridgeContext) -> None:
+        self.refresh()
 
     def refresh(self):
 
-        new_data = bridge.get_network_io()
+        new_data = self._bridge.get_network_io()
 
 
         download = (

@@ -22,7 +22,9 @@ function argus.lifecycle.on_load(ctx)
     print("[Disk Watchdog] Alert when any volume exceeds " .. threshold .. "%")
 end
 
-argus.events.disk.on_tick = function(storage)
+argus.events.disk.on_tick = function(ctx)
+    if not ctx then return end
+    local storage = ctx["data"]
     if not storage then return end
     for _, vol in ipairs(storage) do
         local pct = vol["percent"]
