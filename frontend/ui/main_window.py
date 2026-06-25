@@ -31,10 +31,11 @@ from frontend.pages.about_page import AboutPage
 class MainWindow(QMainWindow):
 
 
-    def __init__(self):
+    def __init__(self, bridge):
 
         super().__init__()
 
+        self._bridge = bridge
 
 
         self.setWindowTitle(
@@ -161,7 +162,7 @@ class MainWindow(QMainWindow):
 
 
 
-        self.build_pages()
+        self.build_pages(self._bridge)
 
 
 
@@ -193,54 +194,54 @@ class MainWindow(QMainWindow):
 
 
 
-    def build_pages(self):
+    def build_pages(self, bridge):
 
 
         self.stack.addWidget(
-            OverviewPage()
+            OverviewPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            ProcessesPage()
+            ProcessesPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            SystemPage()
+            SystemPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            CPUPage()
+            CPUPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            MemoryPage()
+            MemoryPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            DiskPage()
+            DiskPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            NetworkPage()
+            NetworkPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            RecordingPage()
+            RecordingPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            SettingsPage()
+            SettingsPage(bridge=bridge)
         )
 
 
         self.stack.addWidget(
-            AboutPage()
+            AboutPage(bridge=bridge)
         )

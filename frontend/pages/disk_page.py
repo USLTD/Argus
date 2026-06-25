@@ -1,4 +1,3 @@
-from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -7,16 +6,19 @@ from PyQt6.QtWidgets import (
     QFrame
 )
 
-from frontend.core.engine_bridge import bridge
 from frontend.graphs.base_graph import BaseGraph
+
+from backend.interfaces.contexts import BridgeContext
+from frontend.core.engine_bridge import EngineBridge
 
 
 class DiskCard(QFrame):
 
-    def __init__(self, drive):
+    def __init__(self, drive: str, bridge: EngineBridge | None = None) -> None:
         super().__init__()
 
         self.drive = drive
+        self._bridge: EngineBridge | None = bridge
 
         self.setFrameShape(QFrame.Shape.Box)
 
@@ -62,16 +64,16 @@ class DiskCard(QFrame):
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.graph)
 
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.refresh)
-        self.timer.start(1000)
+        if self._bridge:
+            self._bridge.state_updated.connect(self._on_state)
 
+    def _on_state(self, ctx: BridgeContext) -> None:
         self.refresh()
 
     def refresh(self):
 
         try:
-            usage = bridge.get_disk_usage(self.drive)
+            usage = self._bridge.get_disk_usage(self.drive)
 
             total_gb = usage["total"] / (1024 ** 3)
             used_gb = usage["used"] / (1024 ** 3)
@@ -96,18 +98,20 @@ class DiskCard(QFrame):
 
 class DiskPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge: EngineBridge | None = None) -> None:
         super().__init__()
+
+        self._bridge: EngineBridge | None = bridge
 
         layout = QVBoxLayout(self)
 
         # C Drive
-        self.c_drive = DiskCard("C:\\")
+        self.c_drive = DiskCard("C:\\", bridge=self._bridge)
         layout.addWidget(self.c_drive)
 
         # D Drive (optional)
         try:
-            self.d_drive = DiskCard("D:\\")
+            self.d_drive = DiskCard("D:\\", bridge=self._bridge)
             layout.addWidget(self.d_drive)
         except:
             pass

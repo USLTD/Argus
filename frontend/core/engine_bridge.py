@@ -1,185 +1,405 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, TypedDict
+
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer
+
+from backend.interfaces.contexts import BridgeContext
+
+if TYPE_CHECKING:
+    from backend.interfaces.enums import Permission
 
 
-class EngineBridge:
+# ------------------------------------------------------------------
+# TypedDicts  —  return-type contracts for every get_*() method
+# ------------------------------------------------------------------
+
+
+class CpuMetricsDict(TypedDict):
+    cpu_percent: float
+    per_core: list[float]
+    frequency: float | None
+    physical_cores: int
+    logical_cores: int
+
+
+class MemoryMetricsDict(TypedDict):
+    total: int
+    used: int
+    available: int
+    free: int
+    cached: int
+    percent: float
+
+
+class DiskUsageDict(TypedDict):
+    total: int
+    used: int
+    free: int
+    percent: float
+
+
+class NetworkIODict(TypedDict):
+    bytes_sent: int
+    bytes_recv: int
+
+
+class ProcessEntryDict(TypedDict):
+    pid: int
+    name: str
+    cpu_percent: float
+    memory_info: int
+    status: str
+    num_threads: int
+    username: str | None
+    ppid: int | None
+    create_time: float | None
+    exe: str | None
+
+
+class SensorsDict(TypedDict):
+    temperatures: dict[str, list[float]]
+
+
+class SystemLoadDict(TypedDict):
+    cpu_percent: float
+    processes: int
+    threads: int
+    handles: int
+
+
+class StaticInfoDict(TypedDict):
+    hostname: str
+    os_name: str
+    os_version: str
+    architecture: str
+    cpu_brand: str
+    cpu_physical_cores: int
+    cpu_logical_cores: int
+    cpu_frequency_mhz: float | None
+    total_ram_bytes: int
+    python_version: str
+    boot_time: str
+
+
+class BatteryDict(TypedDict):
+    percent: float
+    power_plugged: bool | None
+    seconds_left: float | None
+
+
+class AggregatedStateDict(TypedDict):
+    cpu: CpuMetricsDict
+    memory: MemoryMetricsDict
+    disks: list[DiskUsageDict]
+    network: NetworkIODict
+    processes: list[ProcessEntryDict]
+    sensors: dict[str, list[float]]
+    battery: BatteryDict
+    boot_time: float
+    load: SystemLoadDict
+    static_info: StaticInfoDict
+
+
+# ------------------------------------------------------------------
+# EngineBridge  —  QObject with QTimer and typed public API
+# ------------------------------------------------------------------
+
+
+class EngineBridge(QObject):
     """Wraps BackendEngine and exposes typed dict methods for frontend consumption.
 
-    When an engine is available, each method delegates to
-    ``engine.get_system_state()`` (and optionally the active driver for
-    static info / process management).  When no engine is available
-    (e.g. during tests or startup) sensible defaults are returned.
+    Emits ``state_updated`` with a ``BridgeContext`` on each timer tick.
 
-    This class does **not** import or fall back to *psutil* — it is a
-    pure pass-through to engine state.
+    Usage
+    -----
+    .. code-block:: python
+
+        engine = BackendEngine(...)
+        bridge = EngineBridge(engine)
+        bridge.state_updated.connect(my_handler)
+        bridge.start_polling()
+
+    Callers may also access the individual ``get_*()`` methods directly
+    without starting the timer.
     """
 
-    def __init__(self, engine: Any = None) -> None:
+    state_updated = pyqtSignal(BridgeContext)
+
+    def __init__(
+        self,
+        engine: object = None,
+        parent: QObject | None = None,
+        permissions: set[Permission] | None = None,
+    ) -> None:
+        super().__init__(parent)
         self._engine = engine
+        self._permissions = permissions
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def start_polling(self, interval_ms: int = 1000) -> None:
+        """Start the internal tick timer."""
+        self._timer.start(interval_ms)
+
+    def stop_polling(self) -> None:
+        """Stop the internal tick timer."""
+        self._timer.stop()
+
+    def _tick(self) -> None:
+        """Timer callback: emit ``state_updated`` with a fresh BridgeContext."""
+        data = self.get_all()
+        ctx = BridgeContext(data=data, bridge=self)
+        self.state_updated.emit(ctx)
+
+    # ------------------------------------------------------------------
+    # Permission check
+    # ------------------------------------------------------------------
+
+    def _check(self, required: Permission) -> bool:
+        """Check if the bridge's permissions satisfy *required*.
+
+        None = unrestricted (frontend use). Empty set = no data.
+        """
+        if self._permissions is None:
+            return True
+        from backend.interfaces.permissions import PermissionHierarchy
+
+        return any(
+            PermissionHierarchy.grants(p, required) for p in self._permissions
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     @property
-    def _state(self) -> dict[str, Any]:
+    def _state(self) -> dict[str, object]:
         if self._engine is None:
             return {}
         try:
-            return self._engine.get_system_state()
+            return self._engine.get_system_state()  # type: ignore[union-attr, reportAttributeAccessIssue]
         except Exception:
             return {}
 
     @property
-    def _driver(self) -> Any:
+    def _driver(self) -> object:
         if self._engine is None:
             return None
         return getattr(getattr(self._engine, "loader", None), "active_driver", None)
 
     # ------------------------------------------------------------------
-    # Public API  —  all return plain dicts for loose coupling
+    # Public API  —  each method returns a TypedDict
     # ------------------------------------------------------------------
 
-    def get_cpu_metrics(self) -> dict[str, Any]:
+    def get_cpu_metrics(self) -> CpuMetricsDict:
         """CPU usage, per-core breakdown, frequency and core counts."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.CPU_READ):
+            return CpuMetricsDict(cpu_percent=0.0, per_core=[], frequency=None, physical_cores=0, logical_cores=0)
         state = self._state
         cpu = state.get("cpu", {})
-        return {
-            "cpu_percent": cpu.get("usage_percent", 0.0),
-            "per_core": [],
-            "frequency": None,
-            "physical_cores": cpu.get("physical_cores", 0),
-            "logical_cores": cpu.get("logical_cores", 0),
-        }
+        assert isinstance(cpu, dict)
+        metrics = cpu.get("metrics", [{}])
+        agg = metrics[0] if metrics else {}
+        per_core_data = [m["usage_percent"] for m in metrics[1:] if "usage_percent" in m]
+        static = state.get("static_info", {})
+        return CpuMetricsDict(
+            cpu_percent=agg.get("usage_percent", 0.0),  # type: ignore[arg-type]
+            per_core=per_core_data,
+            frequency=agg.get("frequency_mhz"),  # type: ignore[arg-type]
+            physical_cores=static.get("cpu_physical_cores", 0),  # type: ignore[arg-type]
+            logical_cores=static.get("cpu_logical_cores", 0),  # type: ignore[arg-type]
+        )
 
-    def get_memory_metrics(self) -> dict[str, Any]:
+    def get_memory_metrics(self) -> MemoryMetricsDict:
         """RAM totals, usage, available, free, cached and percent."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.MEMORY_READ):
+            return MemoryMetricsDict(total=0, used=0, available=0, free=0, cached=0, percent=0.0)
         state = self._state
         ram = state.get("ram", {})
-        total = ram.get("total_bytes", 0)
-        used = ram.get("used_bytes", 0)
-        available = ram.get("available_bytes", 0)
-        percent = ram.get("percent", 0.0)
-        return {
-            "total": total,
-            "used": used,
-            "available": available,
-            "free": available,  # engine reports 'available' as free
-            "cached": 0,
-            "percent": percent,
-        }
+        assert isinstance(ram, dict)
+        metrics = ram.get("metrics", [{}])
+        m = metrics[0] if metrics else {}
+        total = m.get("total_bytes", 0)
+        used = m.get("used_bytes", 0)
+        available = m.get("available_bytes", 0)
+        percent = m.get("percent", 0.0)
+        return MemoryMetricsDict(
+            total=total,  # type: ignore[arg-type]
+            used=used,  # type: ignore[arg-type]
+            available=available,  # type: ignore[arg-type]
+            free=available,  # engine reports 'available' as free
+            cached=0,
+            percent=percent,  # type: ignore[arg-type]
+        )
 
-    def get_disk_usage(self, path: str) -> dict[str, Any]:
+    def get_disk_usage(self, path: str) -> DiskUsageDict:
         """Usage stats for *path* (total / used / free bytes + percent)."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.DISK_READ):
+            return DiskUsageDict(total=0, used=0, free=0, percent=0.0)
         state = self._state
-        storage_list = state.get("storage", [])
+        storage_container = state.get("storage", {})
+        assert isinstance(storage_container, dict)
+        storage_list = storage_container.get("metrics", [])
         for disk in storage_list:
             if isinstance(disk, dict) and disk.get("mount_point", "") == path:
-                return {
-                    "total": disk.get("total_bytes", 0),
-                    "used": disk.get("used_bytes", 0),
-                    "free": disk.get("free_bytes", 0),
-                    "percent": disk.get("percent", 0.0),
-                }
-        return {"total": 0, "used": 0, "free": 0, "percent": 0.0}
+                return DiskUsageDict(
+                    total=disk.get("total_bytes", 0),  # type: ignore[arg-type]
+                    used=disk.get("used_bytes", 0),  # type: ignore[arg-type]
+                    free=disk.get("free_bytes", 0),  # type: ignore[arg-type]
+                    percent=disk.get("percent", 0.0),  # type: ignore[arg-type]
+                )
+        return DiskUsageDict(total=0, used=0, free=0, percent=0.0)
 
-    def get_network_io(self) -> dict[str, Any]:
+    def get_network_io(self) -> NetworkIODict:
         """Aggregate bytes sent / received across all interfaces."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.NETWORK_READ):
+            return NetworkIODict(bytes_sent=0, bytes_recv=0)
         state = self._state
-        net_list = state.get("network", [])
+        net_container = state.get("network", {})
+        net_list = net_container.get("metrics", []) if isinstance(net_container, dict) else []
         total_sent = 0
         total_recv = 0
         for iface in net_list:
             if isinstance(iface, dict):
                 total_sent += iface.get("bytes_sent", 0)
                 total_recv += iface.get("bytes_recv", 0)
-        return {"bytes_sent": total_sent, "bytes_recv": total_recv}
+        return NetworkIODict(bytes_sent=total_sent, bytes_recv=total_recv)
 
-    def get_process_list(self) -> list[dict[str, Any]]:
+    def get_process_list(self) -> list[ProcessEntryDict]:
         """Snapshot of running processes (limited fields)."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.PROCESSES_READ):
+            return []
         state = self._state
-        proc_list = state.get("processes", [])
-        result: list[dict[str, Any]] = []
+        proc_container = state.get("processes", {})
+        proc_list = proc_container.get("metrics", []) if isinstance(proc_container, dict) else []
+        result: list[ProcessEntryDict] = []
         for proc in proc_list:
             if isinstance(proc, dict):
                 result.append(
-                    {
-                        "pid": proc.get("pid", 0),
-                        "name": proc.get("name", ""),
-                        "cpu_percent": proc.get("cpu_percent", 0.0),
-                        "memory_info": proc.get("memory_rss", 0),
-                        "status": proc.get("status", ""),
-                        "num_threads": proc.get("num_threads", 0),
-                        "username": proc.get("username"),
-                        "ppid": proc.get("ppid"),
-                        "create_time": proc.get("create_time"),
-                        "exe": proc.get("exe"),
-                    }
+                    ProcessEntryDict(
+                        pid=proc.get("pid", 0),  # type: ignore[arg-type]
+                        name=proc.get("name", ""),  # type: ignore[arg-type]
+                        cpu_percent=proc.get("cpu_percent", 0.0),  # type: ignore[arg-type]
+                        memory_info=proc.get("memory_rss", 0),  # type: ignore[arg-type]
+                        status=proc.get("status", ""),  # type: ignore[arg-type]
+                        num_threads=proc.get("num_threads", 0),  # type: ignore[arg-type]
+                        username=proc.get("username"),  # type: ignore[arg-type]
+                        ppid=proc.get("ppid"),  # type: ignore[arg-type]
+                        create_time=proc.get("create_time"),  # type: ignore[arg-type]
+                        exe=proc.get("exe"),  # type: ignore[arg-type]
+                    )
                 )
         return result
 
-    def get_sensors(self) -> dict[str, Any]:
+    def get_sensors(self) -> dict[str, list[float]]:
         """Temperatures keyed by sensor name → list of values."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.SENSORS_READ):
+            return {}
         state = self._state
-        sensor_list = state.get("sensors", [])
+        sens_container = state.get("sensors", {})
+        sensor_list = sens_container.get("metrics", []) if isinstance(sens_container, dict) else []
         temps: dict[str, list[float]] = {}
         for s in sensor_list:
             if isinstance(s, dict):
-                name = s.get("name", "unknown")
-                value = s.get("value", 0.0)
-                temps.setdefault(name, []).append(float(value))
+                name = str(s.get("name", "unknown"))
+                value = float(s.get("value", 0.0))
+                temps.setdefault(name, []).append(value)
         return temps
 
-    def get_system_load(self) -> dict[str, Any]:
+    def get_system_load(self) -> SystemLoadDict:
         """CPU load percent, process / thread / handle counts."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.SYSTEM_READ):
+            return SystemLoadDict(cpu_percent=0.0, processes=0, threads=0, handles=0)
         state = self._state
         cpu = state.get("cpu", {})
-        proc_list = state.get("processes", [])
-        return {
-            "cpu_percent": cpu.get("usage_percent", 0.0),
-            "processes": len(proc_list) if isinstance(proc_list, list) else 0,
-            "threads": 0,
-            "handles": 0,
-        }
+        assert isinstance(cpu, dict)
+        metrics = cpu.get("metrics", [{}])
+        agg = metrics[0] if metrics else {}
+        proc_container = state.get("processes", {})
+        proc_list = proc_container.get("metrics", []) if isinstance(proc_container, dict) else []
+        return SystemLoadDict(
+            cpu_percent=agg.get("usage_percent", 0.0),  # type: ignore[arg-type]
+            processes=len(proc_list) if isinstance(proc_list, list) else 0,
+            threads=0,
+            handles=0,
+        )
 
-    def get_static_info(self) -> dict[str, Any]:
+    def get_static_info(self) -> StaticInfoDict:
         """Static system info from the active driver (or defaults)."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.SYSTEM_READ):
+            return StaticInfoDict(
+                hostname="", os_name="", os_version="", architecture="",
+                cpu_brand="", cpu_physical_cores=0, cpu_logical_cores=0,
+                cpu_frequency_mhz=None, total_ram_bytes=0,
+                python_version="", boot_time="",
+            )
         driver = self._driver
         static = None
         if driver is not None and hasattr(driver, "get_static_info"):
             try:
-                static = driver.get_static_info()
+                static = driver.get_static_info()  # type: ignore[union-attr, reportAttributeAccessIssue]
             except Exception:
                 pass
         if static is not None:
             if hasattr(static, "model_dump"):
-                return static.model_dump()
-            return dict(static)
-        return {
-            "hostname": "",
-            "os_name": "",
-            "os_version": "",
-            "architecture": "",
-            "cpu_brand": "",
-            "cpu_physical_cores": 0,
-            "cpu_logical_cores": 0,
-            "cpu_frequency_mhz": None,
-            "total_ram_bytes": 0,
-            "python_version": "",
-            "boot_time": "",
-        }
+                raw = static.model_dump()
+            else:
+                raw = dict(static)  # type: ignore[arg-type]
+            return StaticInfoDict(
+                hostname=raw.get("hostname", ""),
+                os_name=raw.get("os_name", ""),
+                os_version=raw.get("os_version", ""),
+                architecture=raw.get("architecture", ""),
+                cpu_brand=raw.get("cpu_brand", ""),
+                cpu_physical_cores=raw.get("cpu_physical_cores", 0),
+                cpu_logical_cores=raw.get("cpu_logical_cores", 0),
+                cpu_frequency_mhz=raw.get("cpu_frequency_mhz"),
+                total_ram_bytes=raw.get("total_ram_bytes", 0),
+                python_version=raw.get("python_version", ""),
+                boot_time=raw.get("boot_time", ""),
+            )
+        return StaticInfoDict(
+            hostname="",
+            os_name="",
+            os_version="",
+            architecture="",
+            cpu_brand="",
+            cpu_physical_cores=0,
+            cpu_logical_cores=0,
+            cpu_frequency_mhz=None,
+            total_ram_bytes=0,
+            python_version="",
+            boot_time="",
+        )
 
     def get_boot_time(self) -> float:
         """Boot timestamp as a float (or 0.0 when unavailable)."""
-        # The engine does not expose boot time yet — return 0.0
-        # so callers can detect "unavailable" without crashing.
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.SYSTEM_READ):
+            return 0.0
         return 0.0
 
-    def get_disk_partitions(self) -> list[dict[str, Any]]:
+    def get_disk_partitions(self) -> list[dict[str, str]]:
         """Partition list derived from engine storage data."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.DISK_READ):
+            return []
         state = self._state
-        storage_list = state.get("storage", [])
+        storage_container = state.get("storage", {})
+        storage_list = storage_container.get("metrics", []) if isinstance(storage_container, dict) else []
         return [
             {
                 "device": "",
@@ -189,23 +409,50 @@ class EngineBridge:
             for s in (storage_list or [])
         ]
 
-    def get_network_interfaces(self) -> dict[str, Any]:
+    def get_network_interfaces(self) -> dict[str, object]:
         """Network interface → addresses (not yet provided by engine)."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.NETWORK_READ):
+            return {}
         return {}
 
-    def get_battery(self) -> dict[str, Any]:
+    def get_battery(self) -> BatteryDict:
         """Battery charge / status dict."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.BATTERY_READ):
+            return BatteryDict(percent=0.0, power_plugged=None, seconds_left=None)
         state = self._state
-        bat = state.get("battery")
-        if bat is None:
-            return {"percent": 0.0, "power_plugged": None, "seconds_left": None}
-        if isinstance(bat, dict):
-            return {
-                "percent": bat.get("percent", 0.0),
-                "power_plugged": bat.get("power_plugged"),
-                "seconds_left": bat.get("seconds_left"),
-            }
-        return {"percent": 0.0, "power_plugged": None, "seconds_left": None}
+        bat_container = state.get("battery")
+        if bat_container is None:
+            return BatteryDict(percent=0.0, power_plugged=None, seconds_left=None)
+        if isinstance(bat_container, dict):
+            metrics = bat_container.get("metrics", [{}])
+            bat = metrics[0] if metrics else {}
+            return BatteryDict(
+                percent=bat.get("percent", 0.0),  # type: ignore[arg-type]
+                power_plugged=bat.get("power_plugged"),  # type: ignore[arg-type]
+                seconds_left=bat.get("seconds_left"),  # type: ignore[arg-type]
+            )
+        return BatteryDict(percent=0.0, power_plugged=None, seconds_left=None)
+
+    # ------------------------------------------------------------------
+    # Aggregate
+    # ------------------------------------------------------------------
+
+    def get_all(self) -> AggregatedStateDict:
+        """Aggregate all metrics into a single TypedDict."""
+        return AggregatedStateDict(
+            cpu=self.get_cpu_metrics(),
+            memory=self.get_memory_metrics(),
+            disks=[self.get_disk_usage("/")],
+            network=self.get_network_io(),
+            processes=self.get_process_list(),
+            sensors={"temperatures": []},
+            battery=self.get_battery(),
+            boot_time=self.get_boot_time(),
+            load=self.get_system_load(),
+            static_info=self.get_static_info(),
+        )
 
     # ------------------------------------------------------------------
     # Process management  (delegates to driver.manage_process)
@@ -213,23 +460,29 @@ class EngineBridge:
 
     def terminate_process(self, pid: int) -> bool:
         """Request graceful process termination.  Returns success."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.PROCESSES_WRITE):
+            return False
         return self._manage_process(pid, "terminate")
 
     def kill_process(self, pid: int) -> bool:
         """Force-kill a process.  Returns success."""
+        from backend.interfaces.enums import Permission
+        if not self._check(Permission.PROCESSES_EXECUTE):
+            return False
         return self._manage_process(pid, "kill")
 
     def _manage_process(self, pid: int, action: str) -> bool:
         driver = self._driver
         if driver is not None and hasattr(driver, "manage_process"):
             try:
-                return bool(driver.manage_process(pid, action))
+                return bool(driver.manage_process(pid, action))  # type: ignore[union-attr, reportAttributeAccessIssue]
             except Exception:
                 pass
         return False
 
 
 # ------------------------------------------------------------------
-# Module-level singleton
+# Module-level singleton  —  caller must instantiate with a parent
 # ------------------------------------------------------------------
-bridge = EngineBridge()
+bridge: EngineBridge | None = None

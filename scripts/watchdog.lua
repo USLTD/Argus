@@ -4,7 +4,7 @@ METADATA = {
     name = "High CPU Watchdog",
     author = "Power User",
     version = "1.0.0",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
     compatible = {
         "sys.platform EQ 'win32' -> TRUE",
         "sys.platform EQ 'linux' -> TRUE",
@@ -12,7 +12,10 @@ METADATA = {
     }
 }
 
-argus.events.on_tick = function(state)
+argus.events.on_tick = function(ctx)
+    if not ctx then return end
+    local state = ctx["data"]
+    if not state then return end
     local cpu = state["cpu"]
     if cpu and cpu["usage_percent"] > 85.0 then
         print("ALERT: CPU usage " .. cpu["usage_percent"] .. "% exceeds 85% threshold")

@@ -5,50 +5,32 @@ Usage::
     import argus
 
     @argus.lifecycle.on_load
-    def setup(ctx: argus.PluginContext) -> None:
+    def setup(ctx: argus.ScriptContext[None]) -> None:
         argus.api.print("loaded!")
 
     @argus.events.cpu.on_tick
-    def on_cpu(data: dict) -> None:
+    def on_cpu(ctx: argus.ScriptContext[dict]) -> None:
+        data = ctx.data
         argus.api.print(f"CPU: {data['usage_percent']}%")
 """
 
-from types import FunctionType
 from typing import Any, Callable, TypeAlias, final
 
-from backend.core.driver_proxy import DriverProxy as _DriverProxy
+from backend.interfaces.contexts import (
+    GeneralTickData,
+    CpuTickData,
+    MemoryTickData,
+    DiskTickData,
+    NetworkTickData,
+    ProcessTickData,
+    GpuTickData,
+    BatteryTickData,
+    SensorTickData,
+)
+from backend.interfaces.sentinels import Unavailable
 from backend.interfaces.enums import Permission as _Permission
 from backend.interfaces.plugins import PluginMeta as _PluginMeta
-
-
-# ---------------------------------------------------------------------------
-# Context
-# ---------------------------------------------------------------------------
-@final
-class PluginContext:
-    """Runtime context passed to lifecycle hooks."""
-
-    config: Any
-    db: Any
-    driver: _DriverProxy  # DriverProxy instance (permission-gated)
-
-
-# ---------------------------------------------------------------------------
-# Callback slot (``Hook`` is the decorator/assignment type)
-# ---------------------------------------------------------------------------
-@final
-class Hook:
-    """
-    Supports both ``@decorator`` and ``direct-assignment`` syntax.
-
-    * ``@argus.lifecycle.on_load`` — registers *func* via decorator.
-    * ``argus.events.cpu.on_tick = my_func`` — registers by assignment.
-    """
-
-    callback: FunctionType | None
-
-    def __call__(self, func: FunctionType) -> FunctionType:
-        ...
+from ._common import Hook, ScriptContext
 
 
 # ---------------------------------------------------------------------------
@@ -59,9 +41,9 @@ class _Lifecycle:
     """``argus.lifecycle`` — script lifecycle events."""
 
     on_load: Hook
-    """Called when the script is loaded (receives :class:`PluginContext`)."""
+    """Called when the script is loaded (receives :class:`ScriptContext[None]`)."""
     on_unload: Hook
-    """Called when the script is unloaded (receives :class:`PluginContext`)."""
+    """Called when the script is unloaded (receives :class:`ScriptContext[None]`)."""
 
 
 # ---------------------------------------------------------------------------
@@ -71,64 +53,64 @@ class _Lifecycle:
 class _GeneralEvents:
     """``argus.events.general`` — general engine events."""
 
-    on_tick: Callable[[dict[str, Any]], None] | Hook
-    """Called on each engine tick with the full system state."""
+    on_tick: Callable[[ScriptContext[GeneralTickData]], None] | Hook
+    """Called on each engine tick with the full system state in ``ctx.data``."""
 
 @final
 class _CpuEvents:
     """``argus.events.cpu`` — CPU subsystem events."""
 
-    on_tick: Callable[[dict[str, Any]], None] | Hook
-    """Called on each tick with ``{usage_percent, physical_cores, logical_cores}``."""
+    on_tick: Callable[[ScriptContext[CpuTickData]], None] | Hook
+    """Called on each tick; ``ctx.data`` contains ``{usage_percent, physical_cores, logical_cores}``."""
 
 @final
 class _MemoryEvents:
     """``argus.events.memory`` — RAM subsystem events."""
 
-    on_tick: Callable[[dict[str, Any]], None] | Hook
-    """Called on each tick with ``{percent, total_bytes, used_bytes}``."""
+    on_tick: Callable[[ScriptContext[MemoryTickData]], None] | Hook
+    """Called on each tick; ``ctx.data`` contains ``{percent, total_bytes, used_bytes}``."""
 
 @final
 class _DiskEvents:
     """``argus.events.disk`` — Disk subsystem events."""
 
-    on_tick: Callable[[list[dict[str, Any]]], None] | Hook
-    """Called on each tick with a list of ``{mount, usage_percent}`` dicts."""
+    on_tick: Callable[[ScriptContext[list[DiskTickData]]], None] | Hook
+    """Called on each tick; ``ctx.data`` is a list of ``{mount, usage_percent}`` dicts."""
 
 @final
 class _NetEvents:
     """``argus.events.net`` — Network subsystem events."""
 
-    on_tick: Callable[[list[dict[str, Any]]], None] | Hook
-    """Called on each tick with a list of ``{interface, rx, tx}`` dicts."""
+    on_tick: Callable[[ScriptContext[list[NetworkTickData]]], None] | Hook
+    """Called on each tick; ``ctx.data`` is a list of ``{interface, rx, tx}`` dicts."""
 
 @final
 class _ProcessEvents:
     """``argus.events.process`` — Process subsystem events."""
 
-    on_tick: Callable[[list[dict[str, Any]]], None] | Hook
-    """Called on each tick with a list of ``{pid, name, cpu_percent}`` dicts."""
+    on_tick: Callable[[ScriptContext[list[ProcessTickData]]], None] | Hook
+    """Called on each tick; ``ctx.data`` is a list of ``{pid, name, cpu_percent}`` dicts."""
 
 @final
 class _GpuEvents:
     """``argus.events.gpu`` — GPU subsystem events."""
 
-    on_tick: Callable[[list[dict[str, Any]] | None], None] | Hook
-    """Called on each tick with a list of GPU dicts, or ``None``."""
+    on_tick: Callable[[ScriptContext[GpuTickData | None]], None] | Hook
+    """Called on each tick; ``ctx.data`` is a list of GPU dicts, or ``None``."""
 
 @final
 class _BatteryEvents:
     """``argus.events.battery`` — Battery subsystem events."""
 
-    on_tick: Callable[[dict[str, Any] | None], None] | Hook
-    """Called on each tick with battery info or ``None``."""
+    on_tick: Callable[[ScriptContext[BatteryTickData | None]], None] | Hook
+    """Called on each tick; ``ctx.data`` contains battery info or ``None``."""
 
 @final
 class _SensorEvents:
     """``argus.events.sensor`` — Temperature/voltage sensor events."""
 
-    on_tick: Callable[[list[dict[str, Any]] | None], None] | Hook
-    """Called on each tick with a list of sensor dicts, or ``None``."""
+    on_tick: Callable[[ScriptContext[list[SensorTickData] | None]], None] | Hook
+    """Called on each tick; ``ctx.data`` is a list of sensor dicts, or ``None``."""
 
 @final
 class _Events:
@@ -202,3 +184,4 @@ lifecycle: TypeAlias = _Lifecycle
 events: TypeAlias = _Events
 api: TypeAlias = _Api
 script: TypeAlias = _Script
+

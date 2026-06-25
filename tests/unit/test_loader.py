@@ -27,7 +27,7 @@ class TestDiscoveryLoader:
             """
 from backend.interfaces.plugins import BaseDriver, PluginMeta
 from backend.interfaces.enums import ConfidenceScore, Permission
-from backend.interfaces.caps import SystemCapabilities, SystemMetrics, CPUMetrics, RAMMetrics
+from backend.interfaces.caps import SystemCapabilities, SystemMetrics, CPUMetrics, CPUMetric, MemoryMetrics, MemoryMetric, MetricMetadata
 
 METADATA: PluginMeta = {
     "name": "High",
@@ -39,9 +39,9 @@ METADATA: PluginMeta = {
 
 class HighScore(BaseDriver):
     def get_capabilities(self): return SystemCapabilities()
-    def on_tick(self):
-        return SystemMetrics(cpu=CPUMetrics(physical_cores=1,logical_cores=1,usage_percent=0),
-                             ram=RAMMetrics(total_bytes=1,used_bytes=0,available_bytes=1,percent=0))
+    def on_tick(self, ctx=None):
+        return SystemMetrics(cpu=CPUMetrics(metrics=[CPUMetric(usage_percent=0)]),
+                             ram=MemoryMetrics(metrics=[MemoryMetric(total_bytes=1, used_bytes=0, available_bytes=1, percent=0)]))
     def manage_process(self, pid, action, **kw): return False
 
 DRIVER = HighScore
@@ -51,7 +51,7 @@ DRIVER = HighScore
             """
 from backend.interfaces.plugins import BaseDriver, PluginMeta
 from backend.interfaces.enums import ConfidenceScore, Permission
-from backend.interfaces.caps import SystemCapabilities, SystemMetrics, CPUMetrics, RAMMetrics
+from backend.interfaces.caps import SystemCapabilities, SystemMetrics, CPUMetrics, CPUMetric, MemoryMetrics, MemoryMetric, MetricMetadata
 
 METADATA: PluginMeta = {
     "name": "Low",
@@ -63,9 +63,9 @@ METADATA: PluginMeta = {
 
 class LowScore(BaseDriver):
     def get_capabilities(self): return SystemCapabilities()
-    def on_tick(self):
-        return SystemMetrics(cpu=CPUMetrics(physical_cores=1,logical_cores=1,usage_percent=0),
-                             ram=RAMMetrics(total_bytes=1,used_bytes=0,available_bytes=1,percent=0))
+    def on_tick(self, ctx=None):
+        return SystemMetrics(cpu=CPUMetrics(metrics=[CPUMetric(usage_percent=0)]),
+                             ram=MemoryMetrics(metrics=[MemoryMetric(total_bytes=1, used_bytes=0, available_bytes=1, percent=0)]))
     def manage_process(self, pid, action, **kw): return False
 
 DRIVER = LowScore
@@ -87,7 +87,7 @@ DRIVER = LowScore
             """
 from backend.interfaces.plugins import BaseDriver, PluginMeta
 from backend.interfaces.enums import ConfidenceScore, Permission
-from backend.interfaces.caps import SystemCapabilities, SystemMetrics, CPUMetrics, RAMMetrics
+from backend.interfaces.caps import SystemCapabilities, SystemMetrics, CPUMetrics, CPUMetric, MemoryMetrics, MemoryMetric, MetricMetadata
 
 METADATA: PluginMeta = {
     "name": "CT",
@@ -99,9 +99,9 @@ METADATA: PluginMeta = {
 
 class CustomTest(BaseDriver):
     def get_capabilities(self): return SystemCapabilities()
-    def on_tick(self):
-        return SystemMetrics(cpu=CPUMetrics(physical_cores=1,logical_cores=1,usage_percent=0),
-                             ram=RAMMetrics(total_bytes=1,used_bytes=0,available_bytes=1,percent=0))
+    def on_tick(self, ctx=None):
+        return SystemMetrics(cpu=CPUMetrics(metrics=[CPUMetric(usage_percent=0)]),
+                             ram=MemoryMetrics(metrics=[MemoryMetric(total_bytes=1, used_bytes=0, available_bytes=1, percent=0)]))
     def manage_process(self, pid, action, **kw): return False
 
 DRIVER = CustomTest

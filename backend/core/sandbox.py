@@ -9,13 +9,19 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import monotonic_ns
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from lupa import LuaRuntime
 
 from backend.core.injectors import HookInjector, all_injectors, init_injectors
 from backend.interfaces.enums import CompatAction, Permission
 from backend.interfaces.plugins import BaseDriver, BaseUserScript, PluginMeta
+
+if TYPE_CHECKING:
+    from backend.interfaces.contexts import ScriptContext
+    from backend.interfaces.rules import CompatContext
+    from backend.storage.config import ArgusConfig
 
 _INJECTED_GLOBALS = (
     "collectgarbage",
@@ -119,8 +125,8 @@ class LuaScriptWrapper(BaseUserScript):
     def create_if_compatible(
         cls,
         file_path: Path,
-        compat_ctx: Any,
-        config: Any,
+        compat_ctx: CompatContext,
+        config: ArgusConfig,
     ) -> LuaScriptWrapper | None:
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
@@ -205,13 +211,17 @@ class LuaScriptWrapper(BaseUserScript):
     @staticmethod
     def _evaluate_compatible(
         meta: PluginMeta,
-        compat_ctx: Any,
-        config: Any,
+        compat_ctx: CompatContext,
+        config: ArgusConfig,
     ) -> bool:
         from backend.interfaces.rules import evaluate_script_compatible
 
         compatible_rules = meta.get("compatible")
-        result = evaluate_script_compatible(compatible_rules, compat_ctx)
+        # Lua scripts only use list[str] compat (callable is for drivers)
+        result = evaluate_script_compatible(
+            compatible_rules if isinstance(compatible_rules, list) else None,
+            compat_ctx,
+        )
         if result is not None:
             return result
         return config.script_compatibility_default == CompatAction.LOAD
@@ -248,7 +258,7 @@ class LuaScriptWrapper(BaseUserScript):
             return False
         return self._driver.manage_process(pid, "kill")
 
-    def _make_blocked(self, perm: str):
+    def _make_blocked(self, perm: str) -> Callable[..., bool]:
         msg = self._BLOCKED_MSG.format(perm=perm)
 
         def blocked(*args: Any, **kwargs: Any) -> bool:
@@ -279,9 +289,11 @@ class LuaScriptWrapper(BaseUserScript):
     # Event dispatch
     # ------------------------------------------------------------------
 
-    def dispatch(self, event_path: str, data: Any = None) -> None:
+    def dispatch(self, event_path: str, data: Mapping[str, object] | None = None) -> None:
         """Dispatch a named event to the matching Lua callback.
 
+        Wraps *data* in a Lua table with the same shape as ScriptContext,
+        so Lua callbacks receive ``ctx.data``.
         Respects sleep cooldown (set via ``argus.api.sleep``).
         """
         if data is None:
@@ -291,7 +303,13 @@ class LuaScriptWrapper(BaseUserScript):
             return
         if self._is_asleep:
             return
-        cb(self.lua.table_from(data))
+        lua_ctx = self.lua.table_from({
+            "data": self.lua.table_from(data),
+            "config": None,
+            "db": None,
+            "driver": None,
+        })
+        cb(lua_ctx)
 
     @property
     def _is_asleep(self) -> bool:
@@ -309,25 +327,26 @@ class LuaScriptWrapper(BaseUserScript):
     def bind_driver(self, driver: BaseDriver | None) -> None:
         self._driver = driver
 
-    def execute_tick(self, system_state: dict[str, Any]) -> None:
+    def execute_tick(self, system_state: Mapping[str, object]) -> None:
         """Alias — dispatches ``events.general.on_tick``."""
         self.dispatch("events.general.on_tick", system_state)
 
-    def trigger_load(self, ctx: Any) -> None:
+    def trigger_load(self, ctx: ScriptContext[None]) -> None:
         from backend.core.driver_proxy import DriverProxy
 
         perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
         proxy = DriverProxy(self._driver, perms, meta=self.METADATA)
         self.dispatch(
-            "lifecycle.on_load", {"config": ctx.config, "db": ctx.db, "driver": proxy}
+            "lifecycle.on_load",
+            {"config": getattr(ctx, "config", None), "db": getattr(ctx, "db", None), "driver": proxy},
         )
 
-    def trigger_unload(self, ctx: Any) -> None:
+    def trigger_unload(self, ctx: ScriptContext[None]) -> None:
         from backend.core.driver_proxy import DriverProxy
 
         perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
         proxy = DriverProxy(self._driver, perms, meta=self.METADATA)
         self.dispatch(
             "lifecycle.on_unload",
-            {"config": ctx.config, "db": ctx.db, "driver": proxy},
+            {"config": getattr(ctx, "config", None), "db": getattr(ctx, "db", None), "driver": proxy},
         )

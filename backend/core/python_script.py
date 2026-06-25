@@ -24,7 +24,10 @@ from pathlib import Path
 from time import monotonic_ns
 from types import ModuleType
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.interfaces.contexts import ScriptContext
 
 from backend.core.argus_runtime import (
     create_argus_namespace,
@@ -46,8 +49,8 @@ class PythonScriptWrapper(BaseUserScript):
         self.METADATA = meta
         self._driver: BaseDriver | None = None
         self._argus_mod: ModuleType | None = None
-        self._lifecycle_callbacks: dict[str, Callable] = {}
-        self._event_callbacks: dict[str, Callable] = {}
+        self._lifecycle_callbacks: dict[str, Callable[..., object]] = {}
+        self._event_callbacks: dict[str, Callable[..., object]] = {}
         self._cooldown_until: int = 0
         self._loaded = False
 
@@ -63,6 +66,7 @@ class PythonScriptWrapper(BaseUserScript):
         if self._loaded:
             return
 
+        assert self.file_path is not None
         source = self.file_path.read_text(encoding="utf-8")
         self._argus_mod = create_argus_namespace(self)
 
@@ -89,37 +93,41 @@ class PythonScriptWrapper(BaseUserScript):
         )
         self._loaded = True
 
-    def trigger_load(self, ctx: Any) -> None:
+    def trigger_load(self, ctx: ScriptContext[None]) -> None:
         from backend.core.driver_proxy import DriverProxy
+        from backend.interfaces.contexts import ScriptContext as _ScriptContext
 
         self.load()
         cb = self._lifecycle_callbacks.get("lifecycle.on_load")
         if cb:
             perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
             proxy = DriverProxy(getattr(ctx, "driver", None), perms, meta=self.METADATA)
-            context = {
-                "config": getattr(ctx, "config", None),
-                "db": getattr(ctx, "db", None),
-                "driver": proxy,
-            }
-            cb(context)
+            script_ctx = _ScriptContext[None](
+                data=None,
+                config=getattr(ctx, "config", None),
+                db=getattr(ctx, "db", None),
+                driver=proxy,
+            )
+            cb(script_ctx)
 
-    def trigger_unload(self, ctx: Any) -> None:
+    def trigger_unload(self, ctx: ScriptContext[None]) -> None:
         from backend.core.driver_proxy import DriverProxy
+        from backend.interfaces.contexts import ScriptContext as _ScriptContext
 
         cb = self._lifecycle_callbacks.get("lifecycle.on_unload")
         if cb:
             perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
             proxy = DriverProxy(getattr(ctx, "driver", None), perms, meta=self.METADATA)
-            context = {
-                "config": getattr(ctx, "config", None),
-                "db": getattr(ctx, "db", None),
-                "driver": proxy,
-            }
-            cb(context)
+            script_ctx = _ScriptContext[None](
+                data=None,
+                config=getattr(ctx, "config", None),
+                db=getattr(ctx, "db", None),
+                driver=proxy,
+            )
+            cb(script_ctx)
 
-    def dispatch(self, event_path: str, data: Any = None) -> None:
-        """Dispatch a named event to the matching registered callback.
+    def dispatch(self, event_path: str, data: dict[str, object] | None = None) -> None:
+        """Dispatch a named event, wrapping data in ScriptContext.
 
         Respects sleep cooldown (set via ``argus.api.sleep``).
         """
@@ -130,7 +138,9 @@ class PythonScriptWrapper(BaseUserScript):
             return
         if self._is_asleep:
             return
-        cb(data)
+        from backend.interfaces.contexts import ScriptContext as _ScriptContext
+
+        cb(_ScriptContext(data=data))
 
     def pop_output(self) -> list[str]:
         if self._argus_mod is None:

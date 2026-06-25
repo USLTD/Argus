@@ -14,7 +14,7 @@ class TestLuaScriptWrapper:
         assert meta["name"] == "Test Script"
         assert meta["author"] == "Tester"
         assert meta["version"] == "1.0"
-        assert meta["permissions"] == [Permission.SCRIPT_READ_ONLY]
+        assert meta["permissions"] == [Permission.SCRIPT_READ]  # type: ignore[typeddict-item]
 
     def test_incompatible_script_returns_none(
         self, tmp_path: Path, compat_ctx, config
@@ -24,10 +24,10 @@ class TestLuaScriptWrapper:
             """
 METADATA = {
     name = "Incompat", author = "T", version = "1",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
     compatible = {"sys.platform EQ 'nonexistent' -> TRUE"},
 }
-argus.events.on_tick = function(state) end
+argus.events.general.on_tick = function(ctx) end
 """
         )
         cfg_skip = config
@@ -41,10 +41,10 @@ argus.events.on_tick = function(state) end
             """
 METADATA = {
     name = "Compat", author = "T", version = "1",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
     compatible = {"platform.system LIKE '*' -> TRUE"},
 }
-argus.events.on_tick = function(state) end
+argus.events.general.on_tick = function(ctx) end
 """
         )
         script = LuaScriptWrapper.create_if_compatible(path, compat_ctx, config)
@@ -94,10 +94,10 @@ argus.events.on_tick = function(state) end
             """
 METADATA = {
     name = "NoPerm", author = "T", version = "1",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
     compatible = {"platform.system LIKE '*' -> TRUE"},
 }
-argus.events.on_tick = function(state) end
+argus.events.general.on_tick = function(ctx) end
 """
         )
         script = LuaScriptWrapper.create_if_compatible(path, compat_ctx, config)
@@ -116,7 +116,7 @@ METADATA = {
     permissions = {"INVALID_PERM"},
     compatible = {"platform.system LIKE '*' -> TRUE"},
 }
-argus.events.on_tick = function(state) end
+argus.events.general.on_tick = function(ctx) end
 """
         )
         import pytest
@@ -132,9 +132,9 @@ argus.events.on_tick = function(state) end
             """
 METADATA = {
     name = "NoCompat", author = "T", version = "1",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
 }
-argus.events.on_tick = function(state) end
+argus.events.general.on_tick = function(ctx) end
 """
         )
         from backend.storage.config import ArgusConfig
@@ -152,9 +152,9 @@ argus.events.on_tick = function(state) end
             """
 METADATA = {
     name = "NoCompatLoad", author = "T", version = "1",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
 }
-argus.events.on_tick = function(state) end
+argus.events.general.on_tick = function(ctx) end
 """
         )
         from backend.storage.config import ArgusConfig

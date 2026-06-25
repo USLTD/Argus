@@ -4,7 +4,7 @@ METADATA = {
     name = "Memory Logger",
     author = "Core Team",
     version = "1.0.0",
-    permissions = {"SCRIPT.READ_ONLY"},
+    permissions = {"SCRIPT.READ"},
     compatible = {
         "sys.platform EQ 'win32' -> TRUE",
         "sys.platform EQ 'linux' -> TRUE",
@@ -14,7 +14,10 @@ METADATA = {
 
 local last_percent = 0
 
-argus.events.on_tick = function(state)
+argus.events.on_tick = function(ctx)
+    if not ctx then return end
+    local state = ctx["data"]
+    if not state then return end
     local ram = state["ram"]
     if not ram then return end
 

@@ -4,10 +4,29 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Callable
-from typing import Any, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
-from .caps import StaticSystemInfo, SystemCapabilities, SystemMetrics
+if TYPE_CHECKING:
+    from backend.interfaces.contexts import DriverContext, ScriptContext
+    from backend.storage.config import ArgusConfig
+    from backend.storage.database import DatabaseManager
+
+from .caps import (
+    BatteryMetric,
+    CPUMetric,
+    GPUMetric,
+    MemoryMetric,
+    MetricMetadata,
+    MetricsCollection,
+    NetworkMetric,
+    ProcessMetric,
+    SensorMetric,
+    StaticSystemInfo,
+    StorageMetric,
+    SystemCapabilities,
+)
 from .enums import ConfidenceScore, Permission
+from .sentinels import TickSnapshot, Unavailable
 
 
 class PluginMeta(TypedDict, total=True):
@@ -15,14 +34,14 @@ class PluginMeta(TypedDict, total=True):
     author: str
     version: str
     permissions: NotRequired[list[Permission]]
-    compatible: NotRequired[list[str] | Callable[[Any], ConfidenceScore | None]]
+    compatible: NotRequired[list[str] | Callable[[SystemCapabilities], ConfidenceScore | None]]
 
 
 @dataclass
 class PluginContext:
-    config: Any = None
-    db: Any = None
-    driver: Any | None = None
+    argus_config: ArgusConfig | None = None
+    db: DatabaseManager | None = None
+    driver: BaseDriver | None = None
 
 
 class BasePlugin(ABC):
@@ -36,14 +55,14 @@ class BaseDriver(BasePlugin, ABC):
         self.on_load()
         self._initialized = True
 
-    def on_load(self) -> None:
+    def on_load(self, ctx: DriverContext | None = None) -> None:
         """Called after driver instantiation.
 
         Override only if you understand the driver lifecycle.
         Default: no-op.
         """
 
-    def on_unload(self) -> None:
+    def on_unload(self, ctx: DriverContext | None = None) -> None:
         """Called during driver disposal.
 
         Override only if you understand the driver lifecycle.
@@ -57,16 +76,57 @@ class BaseDriver(BasePlugin, ABC):
     def __enter__(self) -> BaseDriver:
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.dispose()
 
-    @abstractmethod
-    def on_tick(self) -> SystemMetrics:
-        """Called each engine tick. Return current system metrics.
+    # ── Per-subsystem tick methods ──────────────────────────────
 
-        This replaces the old ``fetch_metrics``. The driver produces
-        data ONLY when the engine calls this method.
-        """
+    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric] | Unavailable:
+        """CPU usage, core counts. Override to implement."""
+        return Unavailable("unsupported", "CPU monitoring not implemented")
+
+    def tick_memory(self, ctx: DriverContext) -> MetricsCollection[MemoryMetric] | Unavailable:
+        """RAM total, used, available, percent. Override to implement."""
+        return Unavailable("unsupported", "Memory monitoring not implemented")
+
+    def tick_disk(self, ctx: DriverContext) -> MetricsCollection[StorageMetric] | Unavailable:
+        """Per-mount-point disk usage. Override to implement."""
+        return Unavailable("unsupported", "Disk monitoring not implemented")
+
+    def tick_network(self, ctx: DriverContext) -> MetricsCollection[NetworkMetric] | Unavailable:
+        """Per-interface network I/O counters. Override to implement."""
+        return Unavailable("unsupported", "Network monitoring not implemented")
+
+    def tick_processes(self, ctx: DriverContext) -> MetricsCollection[ProcessMetric] | Unavailable:
+        """Snapshot of running processes. Override to implement."""
+        return Unavailable("unsupported", "Process listing not implemented")
+
+    def tick_gpu(self, ctx: DriverContext) -> MetricsCollection[GPUMetric] | Unavailable:
+        """Per-GPU metrics. Override to implement."""
+        return Unavailable("unsupported", "GPU monitoring not implemented")
+
+    def tick_sensors(self, ctx: DriverContext) -> MetricsCollection[SensorMetric] | Unavailable:
+        """Temperature/voltage/fan sensors. Override to implement."""
+        return Unavailable("unsupported", "Sensor monitoring not implemented")
+
+    def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
+        """Battery charge, status. Override to implement."""
+        return Unavailable("unsupported", "Battery monitoring not implemented")
+
+    # ── Aggregate tick ─────────────────────────────────────────────
+
+    def tick(self, ctx: DriverContext) -> TickSnapshot:
+        """Call all per-subsystem methods. Override for batching."""
+        return TickSnapshot(
+            cpu=self.tick_cpu(ctx),
+            memory=self.tick_memory(ctx),
+            processes=self.tick_processes(ctx),
+            disk=self.tick_disk(ctx),
+            network=self.tick_network(ctx),
+            gpu=self.tick_gpu(ctx),
+            sensors=self.tick_sensors(ctx),
+            battery=self.tick_battery(ctx),
+        )
 
     def get_static_info(self) -> StaticSystemInfo | None:
         """Return static system information, or None if unavailable.
@@ -91,13 +151,13 @@ class BaseUserScript(BasePlugin):
     file_path: Path | None = None
     METADATA: PluginMeta | None = None
 
-    def bind_driver(self, driver: Any) -> None:
+    def bind_driver(self, driver: BaseDriver | None) -> None:
         """Optional: receive the active driver reference."""
 
-    def trigger_load(self, ctx: Any) -> None:
+    def trigger_load(self, ctx: ScriptContext[None]) -> None:
         """Optional: called when the script is activated."""
 
-    def trigger_unload(self, ctx: Any) -> None:
+    def trigger_unload(self, ctx: ScriptContext[None]) -> None:
         """Optional: called when the script is about to be unloaded."""
 
     def dispatch(self, event_path: str, data: Any = None) -> None:

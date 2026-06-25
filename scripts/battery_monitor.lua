@@ -18,7 +18,9 @@ METADATA = {
 local last_percent = 0
 local last_plugged = nil
 
-argus.events.battery.on_tick = function(bat)
+argus.events.battery.on_tick = function(ctx)
+    if not ctx then return end
+    local bat = ctx["data"]
     if not bat then return end
 
     local pct = bat["percent"]

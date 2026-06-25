@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from typing import Any, override
 
@@ -9,25 +10,28 @@ import psutil
 
 from backend.interfaces.caps import (
     BatteryCapabilities,
-    BatteryMetrics,
+    BatteryMetric,
     CpuCapabilities,
-    CPUMetrics,
+    CPUMetric,
     DriverInfo,
     GpuCapabilities,
-    GPUMetrics,
+    GPUMetric,
+    MemoryMetric,
+    MetricMetadata,
+    MetricsCollection,
     NetworkCapabilities,
-    NetworkMetrics,
+    NetworkMetric,
     ProcessCapabilities,
-    ProcessInfo,
-    RAMMetrics,
+    ProcessMetric,
     SensorCapabilities,
-    SensorReading,
+    SensorMetric,
     StaticSystemInfo,
     StorageCapabilities,
-    StorageMetrics,
+    StorageMetric,
     SystemCapabilities,
-    SystemMetrics,
 )
+from backend.interfaces.contexts import DriverContext
+from backend.interfaces.sentinels import Unavailable
 from backend.interfaces.plugins import BaseDriver, PluginMeta
 
 
@@ -72,118 +76,167 @@ class WindowsDriver(BaseDriver):
         )
 
     @override
-    def on_tick(self) -> SystemMetrics:
-        cpu = CPUMetrics(
-            physical_cores=psutil.cpu_count(logical=False),
-            logical_cores=psutil.cpu_count(logical=True),
-            usage_percent=psutil.cpu_percent(interval=None),
-        )
-
-        mem = psutil.virtual_memory()
-        ram = RAMMetrics(
-            total_bytes=mem.total,
-            used_bytes=mem.used,
-            available_bytes=mem.available,
-            percent=mem.percent,
-        )
-
-        processes: list[ProcessInfo] = []
-        for proc in psutil.process_iter(
-            ["pid", "name", "cpu_percent", "memory_info", "status", "username"]
-        ):
-            try:
-                pinfo = proc.info
-                mi = pinfo["memory_info"]
-                processes.append(
-                    ProcessInfo(
-                        pid=pinfo["pid"],
-                        name=pinfo["name"] or "",
-                        cpu_percent=pinfo["cpu_percent"] or 0.0,
-                        memory_rss=mi.rss if mi else 0,
-                        status=pinfo["status"] or "",
-                        username=pinfo.get("username"),
-                    )
-                )
-            except psutil.NoSuchProcess, psutil.AccessDenied:
-                continue
-
-        storage: list[StorageMetrics] = []
-        for part in psutil.disk_partitions():
-            try:
-                usage = psutil.disk_usage(part.mountpoint)
-                storage.append(
-                    StorageMetrics(
-                        mount_point=part.mountpoint,
-                        total_bytes=usage.total,
-                        used_bytes=usage.used,
-                        free_bytes=usage.free,
-                        percent=usage.percent,
-                    )
-                )
-            except PermissionError:
-                continue
-
-        net_io = psutil.net_io_counters()
-        network = [
-            NetworkMetrics(
-                bytes_sent=net_io.bytes_sent,
-                bytes_recv=net_io.bytes_recv,
-                packets_sent=net_io.packets_sent,
-                packets_recv=net_io.packets_recv,
+    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric] | Unavailable:
+        try:
+            freq = psutil.cpu_freq()
+            return MetricsCollection[CPUMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=[
+                    CPUMetric(core_id=None, usage_percent=psutil.cpu_percent(), frequency_mhz=freq.current if freq else None),
+                    *[CPUMetric(core_id=i, usage_percent=p) for i, p in enumerate(psutil.cpu_percent(percpu=True))],
+                ],
             )
-        ]
+        except Exception as e:
+            return Unavailable("error", str(e))
 
-        gpu: list[GPUMetrics] | None = None
-        if GPUtil is not None:
-            try:
-                gpus = GPUtil.getGPUs()
-                gpu = [
-                    GPUMetrics(
+    @override
+    def tick_memory(self, ctx: DriverContext) -> MetricsCollection[MemoryMetric] | Unavailable:
+        try:
+            mem = psutil.virtual_memory()
+            return MetricsCollection[MemoryMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=[
+                    MemoryMetric(
+                        total_bytes=mem.total,
+                        used_bytes=mem.used,
+                        available_bytes=mem.available,
+                        percent=mem.percent,
+                    )
+                ],
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
+
+    @override
+    def tick_processes(self, ctx: DriverContext) -> MetricsCollection[ProcessMetric] | Unavailable:
+        try:
+            metrics: list[ProcessMetric] = []
+            for proc in psutil.process_iter(
+                ["pid", "name", "cpu_percent", "memory_info", "status", "username"]
+            ):
+                try:
+                    pinfo = proc.info
+                    mi = pinfo["memory_info"]
+                    metrics.append(
+                        ProcessMetric(
+                            pid=pinfo["pid"],
+                            name=pinfo["name"] or "",
+                            cpu_percent=pinfo["cpu_percent"] or 0.0,
+                            memory_rss=mi.rss if mi else 0,
+                            status=pinfo["status"] or "",
+                            username=pinfo.get("username"),
+                        )
+                    )
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            return MetricsCollection[ProcessMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=metrics,
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
+
+    @override
+    def tick_disk(self, ctx: DriverContext) -> MetricsCollection[StorageMetric] | Unavailable:
+        try:
+            metrics: list[StorageMetric] = []
+            for part in psutil.disk_partitions():
+                try:
+                    usage = psutil.disk_usage(part.mountpoint)
+                    metrics.append(
+                        StorageMetric(
+                            mount_point=part.mountpoint,
+                            total_bytes=usage.total,
+                            used_bytes=usage.used,
+                            free_bytes=usage.free,
+                            percent=usage.percent,
+                        )
+                    )
+                except PermissionError:
+                    continue
+            return MetricsCollection[StorageMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=metrics,
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
+
+    @override
+    def tick_network(self, ctx: DriverContext) -> MetricsCollection[NetworkMetric] | Unavailable:
+        try:
+            net_io = psutil.net_io_counters()
+            return MetricsCollection[NetworkMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=[
+                    NetworkMetric(
+                        bytes_sent=net_io.bytes_sent,
+                        bytes_recv=net_io.bytes_recv,
+                        packets_sent=net_io.packets_sent,
+                        packets_recv=net_io.packets_recv,
+                    )
+                ],
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
+
+    @override
+    def tick_gpu(self, ctx: DriverContext) -> MetricsCollection[GPUMetric] | Unavailable:
+        if GPUtil is None:
+            return Unavailable("unsupported", "GPUtil not installed")
+        try:
+            gpus = GPUtil.getGPUs()
+            return MetricsCollection[GPUMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=[
+                    GPUMetric(
                         name=g.name,
                         usage_percent=g.load * 100,
                         memory_total=int(g.memoryTotal * 1024 * 1024),
                         memory_used=int(g.memoryUsed * 1024 * 1024),
                     )
                     for g in gpus
-                ]
-            except Exception:
-                pass
+                ],
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
 
-        sensors: list[SensorReading] = []
+    @override
+    def tick_sensors(self, ctx: DriverContext) -> MetricsCollection[SensorMetric] | Unavailable:
         try:
+            metrics: list[SensorMetric] = []
             for name, entries in psutil.sensors_temperatures().items():
                 for entry in entries:
-                    sensors.append(
-                        SensorReading(
+                    metrics.append(
+                        SensorMetric(
                             name=f"{name}_{entry.label or 'unknown'}",
                             value=entry.current,
                         )
                     )
-        except Exception:
-            pass
+            return MetricsCollection[SensorMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=metrics,
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
 
-        battery: BatteryMetrics | None = None
+    @override
+    def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
         try:
             sb = psutil.sensors_battery()
-            if sb is not None:
-                battery = BatteryMetrics(
-                    percent=sb.percent,
-                    power_plugged=sb.power_plugged,
-                    seconds_left=sb.secsleft if sb.secsleft != -1 else None,
-                )
-        except Exception:
-            pass
-
-        return SystemMetrics(
-            cpu=cpu,
-            ram=ram,
-            processes=processes,
-            storage=storage,
-            network=network,
-            gpu=gpu,
-            sensors=sensors,
-            battery=battery,
-        )
+            if sb is None:
+                return Unavailable("unsupported", "No battery detected")
+            return MetricsCollection[BatteryMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=[
+                    BatteryMetric(
+                        percent=sb.percent,
+                        power_plugged=sb.power_plugged,
+                        seconds_left=sb.secsleft if sb.secsleft != -1 else None,
+                    )
+                ],
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
 
     @override
     def get_static_info(self) -> StaticSystemInfo:

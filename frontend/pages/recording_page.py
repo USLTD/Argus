@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 
 class RecordingPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, bridge=None):
 
         super().__init__()
 

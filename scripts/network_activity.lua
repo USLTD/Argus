@@ -20,7 +20,9 @@ local last_sent = 0
 local last_recv = 0
 local tick_interval = 1.0
 
-argus.events.net.on_tick = function(net)
+argus.events.net.on_tick = function(ctx)
+    if not ctx then return end
+    local net = ctx["data"]
     if not net or #net == 0 then return end
 
     local iface = net[1]

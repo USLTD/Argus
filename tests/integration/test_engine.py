@@ -18,7 +18,7 @@ class TestBackendEngine:
         state = engine.get_system_state()
         # The real driver runs, so state should have cpu/ram
         if "error" in state:
-            assert state["error"] == "No valid driver loaded."
+            assert state["error"] == "No driver loaded."
         else:
             assert "cpu" in state
             assert "ram" in state

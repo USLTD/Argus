@@ -95,9 +95,9 @@ def main() -> None:
         print(f"\n  Active Driver: {name} v{version} by {author}")
         print(f"    Permissions: {', '.join(str(p) for p in perms)}")
         print(
-            f"    Capabilities: cpu={caps.cpu.present}, gpu={caps.gpu.present}, "
-            f"storage={caps.storage.present}, network={caps.network.present}, "
-            f"sensors={caps.sensors.present}, battery={caps.battery.present}"
+            f"    Capabilities: cpu={caps.cpu.present}, gpu={caps.gpu.present}, "  # type: ignore[union-attr]
+            f"storage={caps.storage.present}, network={caps.network.present}, "  # type: ignore[union-attr]
+            f"sensors={caps.sensors.present}, battery={caps.battery.present}"  # type: ignore[union-attr]
         )
     else:
         print("\n  CRITICAL: No compatible driver found.")
@@ -129,67 +129,67 @@ def main() -> None:
 
             # --- Core metrics ---
             print(
-                f"[{tick_count:>3}] CPU: {cpu['usage_percent']:5.1f}% "
-                f"({cpu['physical_cores']}C/{cpu['logical_cores']}T)  "
-                f"| RAM: {ram['percent']:5.1f}% "
-                f"({ram['used_bytes'] >> 20}MB / {ram['total_bytes'] >> 20}MB)"
+                f"[{tick_count:>3}] CPU: {cpu['usage_percent']:5.1f}% "  # type: ignore[index]
+                f"({cpu['physical_cores']}C/{cpu['logical_cores']}T)  "  # type: ignore[index]
+                f"| RAM: {ram['percent']:5.1f}% "  # type: ignore[index]
+                f"({ram['used_bytes'] >> 20}MB / {ram['total_bytes'] >> 20}MB)"  # type: ignore[index]
             )
 
             # --- Top process ---
             procs = state.get("processes")
             if procs:
-                top = sorted(procs, key=lambda p: p["cpu_percent"], reverse=True)[0]
+                top = sorted(procs, key=lambda p: p["cpu_percent"], reverse=True)[0]  # type: ignore[arg-type, index]
                 print(
-                    f"         Top: PID {top['pid']:<6} {top['name']:<20s} @ {top['cpu_percent']:5.1f}%"
+                    f"         Top: PID {top['pid']:<6} {top['name']:<20s} @ {top['cpu_percent']:5.1f}%"  # type: ignore[index]
                 )
 
             # --- Network ---
             net = state.get("network")
             if net:
-                n = net[0]
+                n = net[0]  # type: ignore[index]
                 print(
-                    f"         Net: {n['bytes_sent'] >> 10:>8}KB sent "
-                    f"/ {n['bytes_recv'] >> 10:>8}KB recv"
+                    f"         Net: {n['bytes_sent'] >> 10:>8}KB sent "  # type: ignore[index]
+                    f"/ {n['bytes_recv'] >> 10:>8}KB recv"  # type: ignore[index]
                 )
 
             # --- GPU ---
             gpu = state.get("gpu")
             if gpu:
-                for g in gpu:
+                for g in gpu:  # type: ignore[union-attr]
                     print(
-                        f"         GPU: {g['name']} @ {g['usage_percent']:4.0f}% "
-                        f"({g['memory_used'] >> 20}MB / {g['memory_total'] >> 20}MB)"
+                        f"         GPU: {g['name']} @ {g['usage_percent']:4.0f}% "  # type: ignore[index]
+                        f"({g['memory_used'] >> 20}MB / {g['memory_total'] >> 20}MB)"  # type: ignore[index]
                     )
 
             # --- Battery ---
             battery = state.get("battery")
             if battery:
-                plugged = "plugged" if battery.get("power_plugged") else "on battery"
-                print(f"         Battery: {battery['percent']:5.1f}% ({plugged})")
+                plugged = "plugged" if battery.get("power_plugged") else "on battery"  # type: ignore[union-attr]
+                print(f"         Battery: {battery['percent']:5.1f}% ({plugged})")  # type: ignore[index]
 
             # --- Storage (verbose) ---
             storage = state.get("storage")
             if args.verbose and storage:
-                for vol in storage:
+                for vol in storage:  # type: ignore[union-attr]
                     print(
-                        f"         Disk {vol['mount_point']}: "
-                        f"{vol['percent']:5.1f}% "
-                        f"({vol['used_bytes'] >> 20}MB / {vol['total_bytes'] >> 20}MB)"
+                        f"         Disk {vol['mount_point']}: "  # type: ignore[index]
+                        f"{vol['percent']:5.1f}% "  # type: ignore[index]
+                        f"({vol['used_bytes'] >> 20}MB / {vol['total_bytes'] >> 20}MB)"  # type: ignore[index]
                     )
 
             # --- Sensors (verbose) ---
             sensors = state.get("sensors")
             if args.verbose and sensors:
-                for s in sensors:
+                for s in sensors:  # type: ignore[union-attr]
                     print(
-                        f"         Sensor {s['name']}: {s['value']:.1f} {s.get('unit', '?')}"
+                        f"         Sensor {s['name']}: {s['value']:.1f} {s.get('unit', '?')}"  # type: ignore[index, union-attr]
                     )
 
             # --- Script output ---
             for script in engine.loader.active_scripts:
                 if hasattr(script, "pop_output"):
                     for line in script.pop_output():
-                        name = script.METADATA.get("name", "?")
+                        name = script.METADATA.get("name", "?")  # type: ignore[union-attr]
                         print(f"  [{name}] {line}")
 
             elapsed = time.monotonic() - start
