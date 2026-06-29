@@ -137,6 +137,9 @@ class EngineBridge(QObject):
         self._permissions = permissions
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
+        self._state_cache: dict[str, object] | None = None
+        self._process_tick_count: int = 0
+        self._process_cache: list[ProcessEntryDict] = []
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -149,9 +152,11 @@ class EngineBridge(QObject):
     def stop_polling(self) -> None:
         """Stop the internal tick timer."""
         self._timer.stop()
+        self._state_cache = None
 
     def _tick(self) -> None:
         """Timer callback: emit ``state_updated`` with a fresh BridgeContext."""
+        self._refresh_cache()
         data = self.get_all()
         ctx = BridgeContext(data=data, bridge=self)
         self.state_updated.emit(ctx)
@@ -179,12 +184,24 @@ class EngineBridge(QObject):
 
     @property
     def _state(self) -> dict[str, object]:
+        if self._state_cache is not None:
+            return self._state_cache
         if self._engine is None:
             return {}
         try:
             return self._engine.get_system_state()  # type: ignore[union-attr, reportAttributeAccessIssue]
         except Exception:
             return {}
+
+    def _refresh_cache(self) -> None:
+        """Fetch fresh state from engine and populate the per-tick cache."""
+        if self._engine is None:
+            self._state_cache = {}
+            return
+        try:
+            self._state_cache = self._engine.get_system_state()  # type: ignore[union-attr, reportAttributeAccessIssue]
+        except Exception:
+            self._state_cache = {}
 
     @property
     def _driver(self) -> object:
@@ -275,10 +292,16 @@ class EngineBridge(QObject):
         return NetworkIODict(bytes_sent=total_sent, bytes_recv=total_recv)
 
     def get_process_list(self) -> list[ProcessEntryDict]:
-        """Snapshot of running processes (limited fields)."""
+        """Snapshot of running processes (limited fields).
+
+        Collected fresh every 5th call for performance; cached in between.
+        """
         from backend.interfaces.enums import Permission
         if not self._check(Permission.PROCESSES_READ):
             return []
+        self._process_tick_count += 1
+        if self._process_tick_count % 5 != 1:
+            return list(self._process_cache)
         state = self._state
         proc_container = state.get("processes", {})
         proc_list = proc_container.get("metrics", []) if isinstance(proc_container, dict) else []
@@ -299,7 +322,8 @@ class EngineBridge(QObject):
                         exe=proc.get("exe"),  # type: ignore[arg-type]
                     )
                 )
-        return result
+        self._process_cache = result
+        return list(result)
 
     def get_sensors(self) -> dict[str, list[float]]:
         """Temperatures keyed by sensor name → list of values."""

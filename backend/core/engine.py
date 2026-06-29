@@ -36,23 +36,92 @@ def _error_snapshot(msg: str = "No driver loaded") -> "TickSnapshot":
     return _ERROR_SNAPSHOT
 
 
-def _to_script_data(val: object) -> object:
-    """Convert a TickSnapshot field value to a script-compatible dict/list/None."""
+def _to_script_data(
+    val: object,
+    subsystem: str | None = None,
+    static_info: dict[str, object] | None = None,
+) -> object:
+    """Convert a TickSnapshot field to a flat TickData-shaped dict for scripts.
+
+    * ``Unavailable`` → ``None``
+    * ``MetricsCollection[T]`` → flat TickData dict (scalar for battery/memory/cpu,
+      list of dicts for disk/network/processes/sensors/gpu)
+    * Other model-dumpable objects → ``model_dump()``
+    * Lists → list of ``model_dump()``
+    * Everything else → identity
+    """
     from backend.interfaces.sentinels import Unavailable
 
     if isinstance(val, Unavailable):
         return None
+
+    from backend.interfaces.caps import MetricsCollection
+
+    if isinstance(val, MetricsCollection):
+        if not val.metrics:
+            # Empty collection: scalar subsystems return None, list ones return []
+            return None if subsystem in ("battery", "memory", "cpu") else []
+
+        if subsystem == "battery":
+            return val.metrics[0].model_dump()
+        if subsystem == "memory":
+            return val.metrics[0].model_dump()
+        if subsystem == "cpu":
+            aggregate = None
+            per_core: list[float] = []
+            for m in val.metrics:
+                if m.core_id is None:
+                    aggregate = m
+                else:
+                    per_core.append(m.usage_percent)
+
+            if aggregate is None and val.metrics:
+                aggregate = val.metrics[0]
+
+            if aggregate is None:
+                return None
+
+            result = aggregate.model_dump()
+            result["per_core"] = per_core
+            result.pop("core_id", None)
+
+            phys: int = 0
+            logi: int = 0
+            if static_info:
+                phys = static_info.get("cpu_physical_cores", 0) or 0  # type: ignore[assignment]
+                logi = static_info.get("cpu_logical_cores", 0) or 0  # type: ignore[assignment]
+
+            result["physical_cores"] = phys
+            result["logical_cores"] = logi
+            return result
+
+        # List-type subsystems: disk, network, processes, sensors, gpu
+        return [m.model_dump() for m in val.metrics]
+
+    # Legacy passthrough for non-MetricsCollection objects
     if hasattr(val, "model_dump"):
         return val.model_dump()  # type: ignore[return-value]
     if isinstance(val, list):
-        result: list[object] = []
-        for item in val:
-            if hasattr(item, "model_dump"):
-                result.append(item.model_dump())  # type: ignore[union-attr]
-            else:
-                result.append(item)
-        return result
+        return [item.model_dump() if hasattr(item, "model_dump") else item for item in val]
     return val
+
+
+def _snapshot_to_general_dict(
+    snapshot: "TickSnapshot",
+    static_info: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Convert TickSnapshot to a flat dict matching the ``GeneralTickData`` shape."""
+    return {
+        "cpu": _to_script_data(snapshot.cpu, "cpu", static_info),
+        "ram": _to_script_data(snapshot.memory, "memory"),
+        "processes": _to_script_data(snapshot.processes, "processes"),
+        "storage": _to_script_data(snapshot.disk, "disk"),
+        "gpu": _to_script_data(snapshot.gpu, "gpu"),
+        "network": _to_script_data(snapshot.network, "network"),
+        "sensors": _to_script_data(snapshot.sensors, "sensors"),
+        "battery": _to_script_data(snapshot.battery, "battery"),
+        "extra": {},
+    }
 
 
 def _snapshot_to_metrics(snapshot: "TickSnapshot") -> "SystemMetrics":
@@ -85,18 +154,26 @@ def _snapshot_to_metrics(snapshot: "TickSnapshot") -> "SystemMetrics":
     )
 
 
-def _build_event_dispatch(snapshot: "TickSnapshot") -> dict[str, object]:
-    """Build event->data mapping for script dispatch from a TickSnapshot."""
+def _build_event_dispatch(
+    snapshot: "TickSnapshot",
+    static_info: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Build event->data mapping for script dispatch from a TickSnapshot.
+
+    The ``events.general.on_tick`` key receives the full ``GeneralTickData``-shaped
+    dict.  Each per-subsystem key receives the flat TickData dict (or list) for
+    that subsystem alone, so scripts can subscribe to specific events.
+    """
     return {
-        "events.general.on_tick": snapshot,
-        "events.cpu.on_tick": _to_script_data(snapshot.cpu),
-        "events.memory.on_tick": _to_script_data(snapshot.memory),
-        "events.disk.on_tick": _to_script_data(snapshot.disk),
-        "events.net.on_tick": _to_script_data(snapshot.network),
-        "events.process.on_tick": _to_script_data(snapshot.processes),
-        "events.gpu.on_tick": _to_script_data(snapshot.gpu),
-        "events.battery.on_tick": _to_script_data(snapshot.battery),
-        "events.sensor.on_tick": _to_script_data(snapshot.sensors),
+        "events.general.on_tick": _snapshot_to_general_dict(snapshot, static_info),
+        "events.cpu.on_tick": _to_script_data(snapshot.cpu, "cpu", static_info),
+        "events.memory.on_tick": _to_script_data(snapshot.memory, "memory"),
+        "events.disk.on_tick": _to_script_data(snapshot.disk, "disk"),
+        "events.net.on_tick": _to_script_data(snapshot.network, "network"),
+        "events.process.on_tick": _to_script_data(snapshot.processes, "processes"),
+        "events.gpu.on_tick": _to_script_data(snapshot.gpu, "gpu"),
+        "events.battery.on_tick": _to_script_data(snapshot.battery, "battery"),
+        "events.sensor.on_tick": _to_script_data(snapshot.sensors, "sensors"),
     }
 
 
@@ -142,11 +219,21 @@ class BackendEngine:
         drv_ctx = DriverContext(engine=self)
         snapshot: "TickSnapshot" = self.loader.active_driver.tick(drv_ctx)
 
+        # Fetch static system info for CPU core counts and other static fields
+        static_info: dict[str, object] | None = None
+        if hasattr(self.loader.active_driver, "get_static_info"):
+            try:
+                si = self.loader.active_driver.get_static_info()
+                if si is not None:
+                    static_info = si.model_dump()
+            except Exception:
+                pass
+
         if self.db:
             metrics = _snapshot_to_metrics(snapshot)
             self.db.write_snapshot(metrics)
 
-        event_data = _build_event_dispatch(snapshot)
+        event_data = _build_event_dispatch(snapshot, static_info)
         for script in self.loader.active_scripts:
             for event_path, data in event_data.items():
                 if data is not None:

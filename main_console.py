@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import time
 
+import psutil
+
 from backend.core.engine import BackendEngine
 from backend.core.loader import DriverCandidate
 from backend.interfaces.enums import ConfidenceScore
@@ -124,65 +126,84 @@ def main() -> None:
                 break
 
             tick_count += 1
-            cpu = state["cpu"]
-            ram = state["ram"]
+            cpu_data = state.get("cpu")
+            if cpu_data and cpu_data.get("metrics"):
+                cpu_agg = cpu_data["metrics"][0]  # core_id=None = aggregate
+                cpu_usage = cpu_agg.get("usage_percent", 0.0)
+                cpu_freq = cpu_agg.get("frequency_mhz")
+            else:
+                cpu_usage, cpu_freq = 0.0, None
+
+            ram_data = state.get("ram")
+            if ram_data and ram_data.get("metrics"):
+                ram = ram_data["metrics"][0]
+                ram_pct = ram.get("percent", 0.0)
+                ram_used = ram.get("used_bytes", 0)
+                ram_total = ram.get("total_bytes", 0)
+            else:
+                ram_pct, ram_used, ram_total = 0.0, 0, 0
 
             # --- Core metrics ---
+            p_cores = psutil.cpu_count(logical=False) or 0
+            l_cores = psutil.cpu_count(logical=True) or 0
             print(
-                f"[{tick_count:>3}] CPU: {cpu['usage_percent']:5.1f}% "  # type: ignore[index]
-                f"({cpu['physical_cores']}C/{cpu['logical_cores']}T)  "  # type: ignore[index]
-                f"| RAM: {ram['percent']:5.1f}% "  # type: ignore[index]
-                f"({ram['used_bytes'] >> 20}MB / {ram['total_bytes'] >> 20}MB)"  # type: ignore[index]
+                f"[{tick_count:>3}] CPU: {cpu_usage:5.1f}% "
+                f"({p_cores}C/{l_cores}T)  "
+                f"| RAM: {ram_pct:5.1f}% "
+                f"({ram_used >> 20}MB / {ram_total >> 20}MB)"
             )
 
             # --- Top process ---
-            procs = state.get("processes")
-            if procs:
-                top = sorted(procs, key=lambda p: p["cpu_percent"], reverse=True)[0]  # type: ignore[arg-type, index]
+            procs_data = state.get("processes")
+            if procs_data and procs_data.get("metrics"):
+                procs = procs_data["metrics"]
+                top = sorted(procs, key=lambda p: p.get("cpu_percent", 0), reverse=True)[0]
                 print(
-                    f"         Top: PID {top['pid']:<6} {top['name']:<20s} @ {top['cpu_percent']:5.1f}%"  # type: ignore[index]
+                    f"         Top: PID {top['pid']:<6} {top.get('name', '?'):<20s} @ {top.get('cpu_percent', 0):5.1f}%"
                 )
 
             # --- Network ---
-            net = state.get("network")
-            if net:
-                n = net[0]  # type: ignore[index]
+            net_data = state.get("network")
+            if net_data and net_data.get("metrics"):
+                nets = net_data["metrics"]
+                n = nets[0]
                 print(
-                    f"         Net: {n['bytes_sent'] >> 10:>8}KB sent "  # type: ignore[index]
-                    f"/ {n['bytes_recv'] >> 10:>8}KB recv"  # type: ignore[index]
+                    f"         Net: {n.get('bytes_sent', 0) >> 10:>8}KB sent "
+                    f"/ {n.get('bytes_recv', 0) >> 10:>8}KB recv"
                 )
 
             # --- GPU ---
-            gpu = state.get("gpu")
-            if gpu:
-                for g in gpu:  # type: ignore[union-attr]
+            gpu_data = state.get("gpu")
+            if gpu_data and gpu_data.get("metrics"):
+                for g in gpu_data["metrics"]:
                     print(
-                        f"         GPU: {g['name']} @ {g['usage_percent']:4.0f}% "  # type: ignore[index]
-                        f"({g['memory_used'] >> 20}MB / {g['memory_total'] >> 20}MB)"  # type: ignore[index]
+                        f"         GPU: {g.get('name', '?')} @ {g.get('usage_percent', 0):4.0f}% "
+                        f"({g.get('memory_used', 0) >> 20}MB / {g.get('memory_total', 0) >> 20}MB)"
                     )
 
             # --- Battery ---
-            battery = state.get("battery")
-            if battery:
-                plugged = "plugged" if battery.get("power_plugged") else "on battery"  # type: ignore[union-attr]
-                print(f"         Battery: {battery['percent']:5.1f}% ({plugged})")  # type: ignore[index]
+            battery_data = state.get("battery")
+            if battery_data and battery_data.get("metrics"):
+                bat = battery_data["metrics"][0]
+                plugged = "plugged" if bat.get("power_plugged") else "on battery"
+                print(f"         Battery: {bat.get('percent', 0):5.1f}% ({plugged})")
 
             # --- Storage (verbose) ---
-            storage = state.get("storage")
-            if args.verbose and storage:
-                for vol in storage:  # type: ignore[union-attr]
+            storage_data = state.get("storage")
+            if args.verbose and storage_data and storage_data.get("metrics"):
+                for vol in storage_data["metrics"]:
                     print(
-                        f"         Disk {vol['mount_point']}: "  # type: ignore[index]
-                        f"{vol['percent']:5.1f}% "  # type: ignore[index]
-                        f"({vol['used_bytes'] >> 20}MB / {vol['total_bytes'] >> 20}MB)"  # type: ignore[index]
+                        f"         Disk {vol.get('mount_point', '?')}: "
+                        f"{vol.get('percent', 0):5.1f}% "
+                        f"({vol.get('used_bytes', 0) >> 20}MB / {vol.get('total_bytes', 0) >> 20}MB)"
                     )
 
             # --- Sensors (verbose) ---
-            sensors = state.get("sensors")
-            if args.verbose and sensors:
-                for s in sensors:  # type: ignore[union-attr]
+            sensors_data = state.get("sensors")
+            if args.verbose and sensors_data and sensors_data.get("metrics"):
+                for s in sensors_data["metrics"]:
                     print(
-                        f"         Sensor {s['name']}: {s['value']:.1f} {s.get('unit', '?')}"  # type: ignore[index, union-attr]
+                        f"         Sensor {s.get('name', '?')}: {s.get('value', 0):.1f} {s.get('unit', '?')}"
                     )
 
             # --- Script output ---
