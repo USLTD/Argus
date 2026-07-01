@@ -57,10 +57,10 @@ class AdapterTable(QTableWidget):
 
         adapters = self.bridge.get_network_interfaces()
 
-        io_data = self.bridge.get_network_interfaces_io()
+        io_data_raw = self.bridge.get_network_io()
 
         print("ADAPTER DATA:", adapters)
-        print("IO DATA:", io_data)
+        print("IO DATA:", io_data_raw)
 
 
         self.setRowCount(len(adapters))
