@@ -104,6 +104,7 @@ argus/
 │   │   ├── contexts.py    # Hook context types (ScriptContext, DriverContext, BridgeContext)
 │   │   ├── sentinels.py   # TickSnapshot, Unavailable types
 │   │   ├── enums.py       # Permission, ConfidenceScore, CompatAction
+│   │   ├── permissions.py # PermissionHierarchy
 │   │   └── rules.py       # Compatibility evaluation rules
 │   └── storage/           # Configuration and database
 │       ├── config.py      # ArgusConfig (pydantic-settings)
@@ -119,13 +120,12 @@ argus/
 │   │   └── generic_windows.py # Windows driver using psutil + WMI
 │   └── custom/            # User-provided drivers (auto-discovered)
 ├── scripts/               # Python and Lua user scripts
-│   ├── cpu_logger.py
-│   ├── disk_watchdog.lua
-│   ├── memory_logger.lua
-│   ├── process_watchdog.lua
-│   └── ...
+│   ├── cpu_logger.py      # Example: log CPU metrics
+│   ├── disk_watchdog.lua  # Example: alert on disk usage
+│   ├── memory_logger.lua  # Example: log memory metrics
+│   ├── process_watchdog.lua # Example: monitor processes
+│   └── ...                # (8 more scripts in repo)
 ├── docs/                  # Documentation
-│   └── api/               # Auto-generated API docs
 ├── main_tui.py            # Textual TUI entry point (884 lines)
 ├── main_gui.py            # PyQt6 GUI entry point
 ├── main_console.py        # Console/debug entry point

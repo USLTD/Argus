@@ -206,15 +206,7 @@ class PerformancePage(QWidget):
         self.core_bars = []
         self.core_labels = []
 
-        if self._bridge:
-
-            logical = self._bridge.get_cpu_metrics()[
-                "logical_cores"
-            ]
-
-        else:
-
-            logical = 8
+        logical = 8
 
         for i in range(logical):
             label = QLabel(

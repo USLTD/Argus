@@ -11,6 +11,13 @@ if TYPE_CHECKING:
     from backend.interfaces.enums import Permission, ScriptExecutionMode
     from backend.storage.config import ArgusConfig
 
+import datetime
+
+from backend.interfaces.caps import UnavailableInfo
+from backend.interfaces.caps import dump_static_info as _dump
+from backend.interfaces.enums import Permission
+from backend.interfaces.permissions import PermissionHierarchy
+
 
 # ------------------------------------------------------------------
 # TypedDicts  —  return-type contracts for every get_*() method
@@ -179,8 +186,6 @@ class EngineBridge(QObject):
         """
         if self._permissions is None:
             return True
-        from backend.interfaces.permissions import PermissionHierarchy
-
         return any(
             PermissionHierarchy.grants(p, required) for p in self._permissions
         )
@@ -222,7 +227,6 @@ class EngineBridge(QObject):
 
     def get_cpu_metrics(self) -> CpuMetricsDict:
         """CPU usage, per-core breakdown, frequency and core counts."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.CPU_READ):
             return CpuMetricsDict(cpu_percent=0.0, per_core=[], frequency=None, physical_cores=0, logical_cores=0)
         state = self._state
@@ -251,7 +255,6 @@ class EngineBridge(QObject):
 
     def get_memory_metrics(self) -> MemoryMetricsDict:
         """RAM totals, usage, available, free, cached and percent."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.MEMORY_READ):
             return MemoryMetricsDict(total=0, used=0, available=0, free=0, cached=0, percent=0.0)
         state = self._state
@@ -274,7 +277,6 @@ class EngineBridge(QObject):
 
     def get_disk_usage(self, path: str) -> DiskUsageDict:
         """Usage stats for *path* (total / used / free bytes + percent)."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.DISK_READ):
             return DiskUsageDict(total=0, used=0, free=0, percent=0.0)
         state = self._state
@@ -293,7 +295,6 @@ class EngineBridge(QObject):
 
     def get_network_io(self) -> NetworkIODict:
         """Network I/O rates (bytes/sec delta)."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.NETWORK_READ):
             return NetworkIODict(bytes_sent=0, bytes_recv=0)
         state = self._state
@@ -318,7 +319,6 @@ class EngineBridge(QObject):
 
     def get_process_list(self) -> list[ProcessEntryDict]:
         """Return the current process list from the engine state."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.PROCESSES_READ):
             return []
         state = self._state
@@ -349,7 +349,6 @@ class EngineBridge(QObject):
 
     def get_sensors(self) -> dict[str, list[float]]:
         """Temperatures keyed by sensor name → list of values."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.SENSORS_READ):
             return {}
         state = self._state
@@ -365,7 +364,6 @@ class EngineBridge(QObject):
 
     def get_system_load(self) -> SystemLoadDict:
         """CPU load percent, process / thread / handle counts."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.SYSTEM_READ):
             return SystemLoadDict(cpu_percent=0.0, processes=0, threads=0, handles=0)
         state = self._state
@@ -384,7 +382,6 @@ class EngineBridge(QObject):
 
     def get_static_info(self) -> StaticInfoDict:
         """Static system info from the active driver (or defaults)."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.SYSTEM_READ):
             return StaticInfoDict()
         driver = self._driver
@@ -395,16 +392,13 @@ class EngineBridge(QObject):
             except Exception:
                 pass
         if static is not None:
-            from backend.interfaces.caps import dump_static_info as _dump
             return _dump(static)
         return StaticInfoDict()
 
     def get_boot_time(self) -> float:
         """Boot timestamp as a float (or 0.0 when unavailable)."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.SYSTEM_READ):
             return 0.0
-        from backend.interfaces.caps import UnavailableInfo
         driver = self._driver
         if driver is not None:
             try:
@@ -412,7 +406,6 @@ class EngineBridge(QObject):
                 if static is not None:
                     bt = static.system.boot_time
                     if not isinstance(bt, UnavailableInfo):
-                        import datetime
                         return datetime.datetime.fromisoformat(str(bt)).timestamp()
             except Exception:
                 pass
@@ -420,7 +413,6 @@ class EngineBridge(QObject):
 
     def get_disk_partitions(self) -> list[dict[str, str]]:
         """Partition list derived from engine storage data."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.DISK_READ):
             return []
         state = self._state
@@ -437,7 +429,6 @@ class EngineBridge(QObject):
 
     def get_network_interfaces(self) -> dict[str, object]:
         """Network interfaces from static info (or empty dict when unavailable)."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.NETWORK_READ):
             return {}
         try:
@@ -457,7 +448,6 @@ class EngineBridge(QObject):
 
     def get_battery(self) -> BatteryDict:
         """Battery charge / status dict."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.BATTERY_READ):
             return BatteryDict(percent=0.0, power_plugged=None, seconds_left=None)
         state = self._state
@@ -499,14 +489,12 @@ class EngineBridge(QObject):
 
     def terminate_process(self, pid: int) -> bool:
         """Request graceful process termination.  Returns success."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.PROCESSES_WRITE):
             return False
         return self._manage_process(pid, "terminate")
 
     def kill_process(self, pid: int) -> bool:
         """Force-kill a process.  Returns success."""
-        from backend.interfaces.enums import Permission
         if not self._check(Permission.PROCESSES_EXECUTE):
             return False
         return self._manage_process(pid, "kill")
@@ -526,8 +514,6 @@ class EngineBridge(QObject):
 
     def get_scripts(self) -> list[ScriptInfo]:
         """Return metadata for all loaded scripts."""
-        from backend.interfaces.enums import Permission
-
         if not self._check(Permission.SCRIPT_READ):
             return []
         if self._engine is None:

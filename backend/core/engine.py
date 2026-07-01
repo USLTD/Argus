@@ -30,6 +30,14 @@ if TYPE_CHECKING:
     )
     from backend.interfaces.plugins import BaseUserScript
 
+import datetime
+from backend.core.python_script import PythonScriptWrapper
+from backend.core.sandbox import LuaScriptWrapper
+
+from backend.interfaces.caps import MetricsCollection
+from backend.interfaces.contexts import ScriptContext
+from backend.interfaces.sentinels import TickSnapshot, Unavailable
+
 
 class ScriptInfo(TypedDict):
     """Metadata for a loaded user script."""
@@ -82,8 +90,6 @@ def _error_snapshot(msg: str = "No driver loaded") -> "TickSnapshot":
     """Lazily build an error snapshot so we don't import at module level."""
     global _ERROR_SNAPSHOT
     if _ERROR_SNAPSHOT is None:
-        from backend.interfaces.sentinels import TickSnapshot, Unavailable
-
         u = Unavailable("error", msg)
         _ERROR_SNAPSHOT = TickSnapshot(
             cpu=u, memory=u, processes=u, disk=u, network=u,
@@ -106,12 +112,8 @@ def _to_script_data(
     * Lists → list of ``model_dump()``
     * Everything else → identity
     """
-    from backend.interfaces.sentinels import Unavailable
-
     if isinstance(val, Unavailable):
         return None
-
-    from backend.interfaces.caps import MetricsCollection
 
     if isinstance(val, MetricsCollection):
         if not val.metrics:
@@ -244,8 +246,6 @@ class BackendEngine:
         return self._config_changed
 
     def _init_active_plugins(self) -> None:
-        from backend.interfaces.contexts import ScriptContext
-
         self._ctx = ScriptContext[None](
             data=None,
             config=self.config,
@@ -389,7 +389,6 @@ class BackendEngine:
 
     def tick_cpu(self) -> "MetricsCollection[CPUMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_cpu(DriverContext(engine=self))
@@ -398,7 +397,6 @@ class BackendEngine:
 
     def tick_memory(self) -> "MetricsCollection[MemoryMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_memory(DriverContext(engine=self))
@@ -407,7 +405,6 @@ class BackendEngine:
 
     def tick_disk(self) -> "MetricsCollection[StorageMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_disk(DriverContext(engine=self))
@@ -416,7 +413,6 @@ class BackendEngine:
 
     def tick_network(self) -> "MetricsCollection[NetworkMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_network(DriverContext(engine=self))
@@ -425,7 +421,6 @@ class BackendEngine:
 
     def tick_processes(self) -> "MetricsCollection[ProcessMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_processes(DriverContext(engine=self))
@@ -434,7 +429,6 @@ class BackendEngine:
 
     def tick_gpu(self) -> "MetricsCollection[GPUMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_gpu(DriverContext(engine=self))
@@ -443,7 +437,6 @@ class BackendEngine:
 
     def tick_sensors(self) -> "MetricsCollection[SensorMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_sensors(DriverContext(engine=self))
@@ -452,7 +445,6 @@ class BackendEngine:
 
     def tick_battery(self) -> "MetricsCollection[BatteryMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_battery(DriverContext(engine=self))
@@ -461,7 +453,6 @@ class BackendEngine:
 
     def tick_users(self) -> "MetricsCollection[UserMetric] | Unavailable":
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
         _t0 = time.monotonic()
         result = self.loader.active_driver.tick_users(DriverContext(engine=self))  # type: ignore[attr-defined]  # basedpyright false positive: BaseDriver.tick_users exists at runtime
@@ -482,12 +473,10 @@ class BackendEngine:
             occurs.
         """
         if not self.loader.active_driver:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("error", "No driver loaded")
 
         method = getattr(self.loader.active_driver, f"tick_{name}", None)
         if method is None:
-            from backend.interfaces.sentinels import Unavailable
             return Unavailable("unsupported", f"Driver has no tick_{name} method")
 
         _t0 = time.monotonic()
@@ -513,13 +502,11 @@ class BackendEngine:
         for name in subsystems:
             enabled = self.config.subsystem_enabled.get(name, True)
             if not enabled:
-                from backend.interfaces.sentinels import Unavailable
                 result[name] = Unavailable("disabled", f"Subsystem '{name}' is disabled in config")
                 continue
             try:
                 result[name] = self.tick_subsystem(name)
             except Exception as e:
-                from backend.interfaces.sentinels import Unavailable
                 result[name] = Unavailable("error", str(e))
         self._last_tick_times["total"] = time.monotonic() - _t0
         return result
@@ -543,7 +530,6 @@ class BackendEngine:
             Use :meth:`tick` instead to get a typed :class:`TickSnapshot`.
         """
         snapshot = self.tick()
-        from backend.interfaces.sentinels import Unavailable
 
         def _to_dict(val: object) -> object:
             if isinstance(val, Unavailable):
@@ -575,8 +561,8 @@ class BackendEngine:
 
     def list_scripts(self) -> list[ScriptInfo]:
         """Return metadata for all loaded scripts."""
-        from backend.core.sandbox import LuaScriptWrapper
-        from backend.core.python_script import PythonScriptWrapper
+        
+        
 
         result: list[ScriptInfo] = []
         for script in self.loader.active_scripts:
@@ -649,8 +635,8 @@ class BackendEngine:
 
     def get_script_status(self, name: str) -> ScriptStatus:
         """Return detailed status for a loaded script by name."""
-        from backend.core.sandbox import LuaScriptWrapper
-        from backend.core.python_script import PythonScriptWrapper
+        
+        
 
         for script in self.loader.active_scripts:
             meta = script.METADATA or {}

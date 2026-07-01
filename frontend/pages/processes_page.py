@@ -188,8 +188,6 @@ class ProcessesPage(QWidget):
         if self._bridge:
             self._bridge.state_updated.connect(self._on_state)
 
-        self.load_processes()
-
         # ======================
         # SHORTCUTS
         # ======================

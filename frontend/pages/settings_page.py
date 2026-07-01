@@ -325,10 +325,6 @@ class SettingsPage(QWidget):
         )
 
 
-        self.load_config()
-
-
-
     def load_config(self):
 
         if not self.bridge:

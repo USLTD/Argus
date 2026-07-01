@@ -19,6 +19,11 @@ from frontend.core.converters import (
     sensor_collection_to_dict,
 )
 
+from backend.interfaces.contexts import DriverContext
+from backend.interfaces.caps import UnavailableInfo
+from backend.interfaces.caps import dump_static_info as _dump
+from backend.interfaces.sentinels import Unavailable
+
 if TYPE_CHECKING:
     from backend.interfaces.plugins import BaseDriver
     from backend.interfaces.sentinels import TickSnapshot
@@ -43,8 +48,6 @@ class SyncBridge:
         now = time.monotonic()
         if now - self._last_tick < 0.05:
             return
-        from backend.interfaces.contexts import DriverContext
-
         ctx = DriverContext()
         self._snapshot = self._driver.tick(ctx)
         self._last_tick = now
@@ -53,8 +56,6 @@ class SyncBridge:
 
     def get_cpu_metrics(self) -> dict:
         """Return CPU metrics as a flat dict."""
-        from backend.interfaces.sentinels import Unavailable
-
         self.tick_all()
         snap = self._snapshot
         if snap is None:
@@ -62,7 +63,6 @@ class SyncBridge:
         if isinstance(snap.cpu, Unavailable):
             return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
         static = self._driver.get_static_info()
-        from backend.interfaces.caps import UnavailableInfo
         if static is not None:
             raw_cores = static.cpu.physical_cores
             raw_threads = static.cpu.logical_cores
@@ -78,8 +78,6 @@ class SyncBridge:
 
     def get_memory_metrics(self) -> dict:
         """Return memory metrics as a flat dict."""
-        from backend.interfaces.sentinels import Unavailable
-
         self.tick_all()
         snap = self._snapshot
         if snap is None:
@@ -90,8 +88,6 @@ class SyncBridge:
 
     def get_disk_usage(self, path: str = "/") -> dict:
         """Return disk usage for *path* as a flat dict."""
-        from backend.interfaces.sentinels import Unavailable
-
         self.tick_all()
         snap = self._snapshot
         if snap is None:
@@ -102,8 +98,6 @@ class SyncBridge:
 
     def get_network_io(self) -> dict:
         """Return aggregate network IO as a flat dict."""
-        from backend.interfaces.sentinels import Unavailable
-
         self.tick_all()
         snap = self._snapshot
         if snap is None:
@@ -114,8 +108,6 @@ class SyncBridge:
 
     def get_process_list(self) -> list[dict]:
         """Return process list as a list of flat dicts."""
-        from backend.interfaces.sentinels import Unavailable
-
         self.tick_all()
         snap = self._snapshot
         if snap is None:
@@ -126,8 +118,6 @@ class SyncBridge:
 
     def get_sensors(self) -> dict:
         """Return sensor temperatures as a dict of name -> list of values."""
-        from backend.interfaces.sentinels import Unavailable
-
         self.tick_all()
         snap = self._snapshot
         if snap is None:
@@ -138,8 +128,6 @@ class SyncBridge:
 
     def get_battery(self) -> dict:
         """Return battery info as a flat dict."""
-        from backend.interfaces.sentinels import Unavailable
-
         self.tick_all()
         snap = self._snapshot
         if snap is None:
@@ -153,7 +141,6 @@ class SyncBridge:
         info = self._driver.get_static_info()
         if info is None:
             return {}
-        from backend.interfaces.caps import dump_static_info as _dump
         return _dump(info)
 
     def get_boot_time(self) -> float:
@@ -161,7 +148,6 @@ class SyncBridge:
         info = self._driver.get_static_info()
         if info is None:
             return 0.0
-        from backend.interfaces.caps import UnavailableInfo
         bt = info.system.boot_time
         if isinstance(bt, UnavailableInfo):
             return 0.0

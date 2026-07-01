@@ -19,6 +19,11 @@ from frontend.core.converters import (
     sensor_collection_to_dict,
 )
 
+from backend.interfaces.contexts import DriverContext
+from backend.interfaces.caps import UnavailableInfo
+from backend.interfaces.caps import dump_static_info as _dump
+from backend.interfaces.sentinels import Unavailable
+
 if TYPE_CHECKING:
     from backend.interfaces.plugins import BaseDriver
     from backend.interfaces.sentinels import TickSnapshot
@@ -42,8 +47,6 @@ class AsyncBridge:
 
     async def tick_all(self) -> None:
         """Refresh all metrics from the driver in a thread executor."""
-        from backend.interfaces.contexts import DriverContext
-
         loop = asyncio.get_running_loop()
         ctx = DriverContext()
         self._snapshot = await loop.run_in_executor(None, self._driver.tick, ctx)
@@ -81,13 +84,10 @@ class AsyncBridge:
         """Return CPU metrics as a flat dict."""
         if self._needs_tick:
             await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None or isinstance(snap.cpu, Unavailable):
             return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
         static = self._driver.get_static_info()
-        from backend.interfaces.caps import UnavailableInfo
         if static is not None:
             raw_cores = static.cpu.physical_cores
             raw_threads = static.cpu.logical_cores
@@ -105,8 +105,6 @@ class AsyncBridge:
         """Return memory metrics as a flat dict."""
         if self._needs_tick:
             await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None or isinstance(snap.memory, Unavailable):
             return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
@@ -116,8 +114,6 @@ class AsyncBridge:
         """Return disk usage for *path* as a flat dict."""
         if self._needs_tick:
             await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None or isinstance(snap.disk, Unavailable):
             return {"total": 0, "used": 0, "free": 0, "percent": 0.0}
@@ -127,8 +123,6 @@ class AsyncBridge:
         """Return aggregate network IO as a flat dict."""
         if self._needs_tick:
             await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None or isinstance(snap.network, Unavailable):
             return {"bytes_sent": 0, "bytes_recv": 0}
@@ -138,8 +132,6 @@ class AsyncBridge:
         """Return process list as a list of flat dicts."""
         if self._needs_tick:
             await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None or isinstance(snap.processes, Unavailable):
             return []
@@ -149,8 +141,6 @@ class AsyncBridge:
         """Return sensor temperatures as a dict."""
         if self._needs_tick:
             await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None or isinstance(snap.sensors, Unavailable):
             return {"temperatures": {}}
@@ -160,8 +150,6 @@ class AsyncBridge:
         """Return battery info as a flat dict."""
         if self._needs_tick:
             await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None or isinstance(snap.battery, Unavailable):
             return {"percent": 0.0, "power_plugged": None, "seconds_left": None}
@@ -172,7 +160,6 @@ class AsyncBridge:
         info = self._driver.get_static_info()
         if info is None:
             return {}
-        from backend.interfaces.caps import dump_static_info as _dump
         return _dump(info)
 
     async def get_boot_time(self) -> float:
@@ -180,7 +167,6 @@ class AsyncBridge:
         info = self._driver.get_static_info()
         if info is None:
             return 0.0
-        from backend.interfaces.caps import UnavailableInfo
         bt = info.system.boot_time
         if isinstance(bt, UnavailableInfo):
             return 0.0
@@ -217,8 +203,6 @@ class AsyncBridge:
     async def get_all(self) -> dict:
         """Return ALL metrics as one dict from a single tick."""
         await self.tick_all()
-        from backend.interfaces.sentinels import Unavailable
-
         snap = self._snapshot
         if snap is None:
             return {"cpu": {}, "memory": {}, "disk": {}, "network": {}, "processes": [], "sensors": {}, "battery": {}}
