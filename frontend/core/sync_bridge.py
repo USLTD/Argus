@@ -6,6 +6,7 @@ re-fetches from the driver via tick_all() to ensure fresh data.
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from frontend.core.converters import (
@@ -33,15 +34,20 @@ class SyncBridge:
     def __init__(self, driver: BaseDriver) -> None:
         self._driver = driver
         self._snapshot: TickSnapshot | None = None
+        self._last_tick: float = 0.0
 
     # ── lifecycle ──────────────────────────────────────────────────
 
     def tick_all(self) -> None:
-        """Refresh all metrics from the driver."""
+        """Refresh all metrics from the driver (idempotent: no-op if ticked within 50ms)."""
+        now = time.monotonic()
+        if now - self._last_tick < 0.05:
+            return
         from backend.interfaces.contexts import DriverContext
 
         ctx = DriverContext()
         self._snapshot = self._driver.tick(ctx)
+        self._last_tick = now
 
     # ── per-subsystem getters ──────────────────────────────────────
 
@@ -49,22 +55,32 @@ class SyncBridge:
         """Return CPU metrics as a flat dict."""
         from backend.interfaces.sentinels import Unavailable
 
+        self.tick_all()
         snap = self._snapshot
         if snap is None:
             return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
         if isinstance(snap.cpu, Unavailable):
             return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
         static = self._driver.get_static_info()
+        from backend.interfaces.caps import UnavailableInfo
+        if static is not None:
+            raw_cores = static.cpu.physical_cores
+            raw_threads = static.cpu.logical_cores
+            cores = raw_cores if isinstance(raw_cores, int) else 0
+            threads = raw_threads if isinstance(raw_threads, int) else 0
+        else:
+            cores = threads = 0
         return cpu_collection_to_dict(
             snap.cpu,
-            static_cores=getattr(static, "cpu_physical_cores", 0) if static else 0,
-            static_threads=getattr(static, "cpu_logical_cores", 0) if static else 0,
+            static_cores=cores,
+            static_threads=threads,
         )
 
     def get_memory_metrics(self) -> dict:
         """Return memory metrics as a flat dict."""
         from backend.interfaces.sentinels import Unavailable
 
+        self.tick_all()
         snap = self._snapshot
         if snap is None:
             return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
@@ -76,6 +92,7 @@ class SyncBridge:
         """Return disk usage for *path* as a flat dict."""
         from backend.interfaces.sentinels import Unavailable
 
+        self.tick_all()
         snap = self._snapshot
         if snap is None:
             return {"total": 0, "used": 0, "free": 0, "percent": 0.0}
@@ -87,6 +104,7 @@ class SyncBridge:
         """Return aggregate network IO as a flat dict."""
         from backend.interfaces.sentinels import Unavailable
 
+        self.tick_all()
         snap = self._snapshot
         if snap is None:
             return {"bytes_sent": 0, "bytes_recv": 0}
@@ -98,6 +116,7 @@ class SyncBridge:
         """Return process list as a list of flat dicts."""
         from backend.interfaces.sentinels import Unavailable
 
+        self.tick_all()
         snap = self._snapshot
         if snap is None:
             return []
@@ -109,6 +128,7 @@ class SyncBridge:
         """Return sensor temperatures as a dict of name -> list of values."""
         from backend.interfaces.sentinels import Unavailable
 
+        self.tick_all()
         snap = self._snapshot
         if snap is None:
             return {"temperatures": {}}
@@ -120,6 +140,7 @@ class SyncBridge:
         """Return battery info as a flat dict."""
         from backend.interfaces.sentinels import Unavailable
 
+        self.tick_all()
         snap = self._snapshot
         if snap is None:
             return {"percent": 0.0, "power_plugged": None, "seconds_left": None}
@@ -128,26 +149,23 @@ class SyncBridge:
         return battery_collection_to_dict(snap.battery)
 
     def get_static_info(self) -> dict:
-        """Return static system info as a dict."""
+        """Return static system info as a nested dict."""
         info = self._driver.get_static_info()
         if info is None:
             return {}
-        return {
-            "hostname": getattr(info, "hostname", ""),
-            "platform": getattr(info, "platform", ""),
-            "platform_version": getattr(info, "platform_version", ""),
-            "cpu_brand": getattr(info, "cpu_brand", ""),
-            "cpu_physical_cores": getattr(info, "cpu_physical_cores", 0),
-            "cpu_logical_cores": getattr(info, "cpu_logical_cores", 0),
-            "total_ram": getattr(info, "total_ram", 0),
-        }
+        from backend.interfaces.caps import dump_static_info as _dump
+        return _dump(info)
 
     def get_boot_time(self) -> float:
         """Return boot time timestamp."""
         info = self._driver.get_static_info()
         if info is None:
             return 0.0
-        return getattr(info, "boot_time", 0.0)
+        from backend.interfaces.caps import UnavailableInfo
+        bt = info.system.boot_time
+        if isinstance(bt, UnavailableInfo):
+            return 0.0
+        return float(bt)
 
     def terminate_process(self, pid: int) -> bool:
         """Ask the driver to terminate *pid* gracefully."""

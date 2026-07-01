@@ -15,7 +15,7 @@ import yaml
 from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
 
 from backend.core.paths import resolve_config_path
-from backend.interfaces.enums import CompatAction
+from backend.interfaces.enums import CompatAction, ScriptExecutionMode
 
 SUBSYSTEM_NAMES: list[str] = [
     "cpu", "memory", "disk", "network", "processes", "gpu", "sensors", "battery", "users"
@@ -33,7 +33,7 @@ class ArgusConfig(BaseSettings):
     script_compatibility_default: CompatAction = CompatAction.SKIP
     script_batch_size: int = 4
     script_timeout_ms: int = 5000
-    script_execution_mode: str = "nonblocking"
+    script_execution_mode: ScriptExecutionMode = ScriptExecutionMode.NONBLOCKING
     process_tick_interval: int = 5  # Collect processes every N ticks (default 5 = ~5s at 1s poll)
     subsystem_enabled: dict[str, bool] = {
         "cpu": True, "memory": True, "disk": True, "network": True,

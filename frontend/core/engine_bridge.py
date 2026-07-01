@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 from backend.interfaces.contexts import BridgeContext
 
-from frontend.core.history_manager import HistoryManager
-
-
 if TYPE_CHECKING:
-    from backend.interfaces.enums import Permission
+    from backend.core.engine import BackendEngine, ScriptInfo
+    from backend.interfaces.enums import Permission, ScriptExecutionMode
+    from backend.storage.config import ArgusConfig
 
 
 # ------------------------------------------------------------------
@@ -71,18 +70,14 @@ class SystemLoadDict(TypedDict):
     handles: int
 
 
-class StaticInfoDict(TypedDict):
-    hostname: str
-    os_name: str
-    os_version: str
-    architecture: str
-    cpu_brand: str
-    cpu_physical_cores: int
-    cpu_logical_cores: int
-    cpu_frequency_mhz: float | None
-    total_ram_bytes: int
-    python_version: str
-    boot_time: str
+class StaticInfoDict(TypedDict, total=False):
+    """Static system info with nested sub-model keys."""
+    cpu: dict
+    gpu: dict
+    motherboard: dict
+    os: dict
+    memory: dict
+    system: dict
 
 
 class BatteryDict(TypedDict):
@@ -128,49 +123,51 @@ class EngineBridge(QObject):
     """
 
     state_updated = pyqtSignal(BridgeContext)
+    config_changed_signal = pyqtSignal(dict)
 
     def __init__(
         self,
-        engine: object = None,
+        engine: Any = None,
         parent: QObject | None = None,
         permissions: set[Permission] | None = None,
+        config: ArgusConfig | None = None,
     ) -> None:
         super().__init__(parent)
         self._engine = engine
         self._permissions = permissions
-        self.history = HistoryManager()
-
+        self._config = config
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
+        self._state_cache: dict[str, Any] | None = None
+        self._last_network_io: NetworkIODict | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def start_polling(self, interval_ms: int = 1000) -> None:
-        """Start the internal tick timer."""
+    def start_polling(self, interval_ms: int | None = None) -> None:
+        """Start the internal tick timer with the configured interval."""
+        if interval_ms is None:
+            interval_ms = self._config.poll_interval_ms if self._config else 1000
         self._timer.start(interval_ms)
+
+    def set_interval(self, ms: int) -> None:
+        """Restart the timer with a new interval (ms)."""
+        self._timer.stop()
+        self._timer.start(ms)
 
     def stop_polling(self) -> None:
         """Stop the internal tick timer."""
         self._timer.stop()
-
-
-        """Timer callback: emit ``state_updated`` with a fresh BridgeContext."""
+        self._state_cache = None
 
     def _tick(self) -> None:
-        data = self.get_all()
         """Timer callback: emit ``state_updated`` with a fresh BridgeContext."""
-        ctx = BridgeContext(
-            data=data,
-            bridge=self
-        )
-
-        # SAVE HISTORY
-        self.history.save(ctx)
-
-        # UPDATE GUI
+        self._refresh_cache()
+        data = self.get_all()
+        ctx = BridgeContext(data=data, bridge=self)
         self.state_updated.emit(ctx)
+
     # ------------------------------------------------------------------
     # Permission check
     # ------------------------------------------------------------------
@@ -193,16 +190,28 @@ class EngineBridge(QObject):
     # ------------------------------------------------------------------
 
     @property
-    def _state(self) -> dict[str, object]:
+    def _state(self) -> dict[str, Any]:
+        if self._state_cache is not None:
+            return self._state_cache
         if self._engine is None:
             return {}
         try:
-            return self._engine.get_system_state()  # type: ignore[union-attr, reportAttributeAccessIssue]
+            return self._engine.get_system_state()
         except Exception:
             return {}
 
+    def _refresh_cache(self) -> None:
+        """Fetch fresh state from engine and populate the per-tick cache."""
+        if self._engine is None:
+            self._state_cache = {}
+            return
+        try:
+            self._state_cache = self._engine.get_system_state()
+        except Exception:
+            self._state_cache = {}
+
     @property
-    def _driver(self) -> object:
+    def _driver(self) -> Any:
         if self._engine is None:
             return None
         return getattr(getattr(self._engine, "loader", None), "active_driver", None)
@@ -229,22 +238,15 @@ class EngineBridge(QObject):
         ]
 
         static = state.get("static_info", {})
-
-        logical = static.get("cpu_logical_cores", 0)
-        physical = static.get("cpu_physical_cores", 0)
-
-        if logical == 0:
-            logical = len(per_core_data)
-
-        if physical == 0:
-            physical = max(1, logical // 2)
-
+        cpu_static = static.get("cpu", {}) if isinstance(static, dict) else {}
+        raw_cores = cpu_static.get("physical_cores", 0)
+        raw_threads = cpu_static.get("logical_cores", 0)
         return CpuMetricsDict(
             cpu_percent=agg.get("usage_percent", 0.0),
             per_core=per_core_data,
             frequency=agg.get("frequency_mhz"),
-            physical_cores=physical,
-            logical_cores=logical,
+            physical_cores=raw_cores if isinstance(raw_cores, int) else 0,
+            logical_cores=raw_threads if isinstance(raw_threads, int) else 0,
         )
 
     def get_memory_metrics(self) -> MemoryMetricsDict:
@@ -262,12 +264,12 @@ class EngineBridge(QObject):
         available = m.get("available_bytes", 0)
         percent = m.get("percent", 0.0)
         return MemoryMetricsDict(
-            total=total,  # type: ignore[arg-type]
-            used=used,  # type: ignore[arg-type]
-            available=available,  # type: ignore[arg-type]
+            total=total,
+            used=used,
+            available=available,
             free=available,  # engine reports 'available' as free
             cached=0,
-            percent=percent,  # type: ignore[arg-type]
+            percent=percent,
         )
 
     def get_disk_usage(self, path: str) -> DiskUsageDict:
@@ -282,15 +284,15 @@ class EngineBridge(QObject):
         for disk in storage_list:
             if isinstance(disk, dict) and disk.get("mount_point", "") == path:
                 return DiskUsageDict(
-                    total=disk.get("total_bytes", 0),  # type: ignore[arg-type]
-                    used=disk.get("used_bytes", 0),  # type: ignore[arg-type]
-                    free=disk.get("free_bytes", 0),  # type: ignore[arg-type]
-                    percent=disk.get("percent", 0.0),  # type: ignore[arg-type]
+                    total=disk.get("total_bytes", 0),
+                    used=disk.get("used_bytes", 0),
+                    free=disk.get("free_bytes", 0),
+                    percent=disk.get("percent", 0.0),
                 )
         return DiskUsageDict(total=0, used=0, free=0, percent=0.0)
 
     def get_network_io(self) -> NetworkIODict:
-        """Aggregate bytes sent / received across all interfaces."""
+        """Network I/O rates (bytes/sec delta)."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.NETWORK_READ):
             return NetworkIODict(bytes_sent=0, bytes_recv=0)
@@ -303,81 +305,44 @@ class EngineBridge(QObject):
             if isinstance(iface, dict):
                 total_sent += iface.get("bytes_sent", 0)
                 total_recv += iface.get("bytes_recv", 0)
-        return NetworkIODict(bytes_sent=total_sent, bytes_recv=total_recv)
+        current = NetworkIODict(bytes_sent=total_sent, bytes_recv=total_recv)
+        if self._last_network_io is not None:
+            delta = NetworkIODict(
+                bytes_sent=current["bytes_sent"] - self._last_network_io["bytes_sent"],
+                bytes_recv=current["bytes_recv"] - self._last_network_io["bytes_recv"],
+            )
+            self._last_network_io = current
+            return delta
+        self._last_network_io = current
+        return current
 
-    def get_network_interfaces_io(self) -> dict[str, dict[str, int]]:
-        """
-        Returns network traffic per adapter.
-        """
-
-        from backend.interfaces.enums import Permission
-
-        if not self._check(Permission.NETWORK_READ):
-            return {}
-
-        state = self._state
-
-        net_container = state.get(
-            "network",
-            {}
-        )
-
-        net_list = (
-            net_container.get("metrics", [])
-            if isinstance(net_container, dict)
-            else []
-        )
-
-        result = {}
-
-        for iface in net_list:
-
-            if isinstance(iface, dict):
-                name = iface.get(
-                    "name",
-                    "unknown"
-                )
-
-                result[name] = {
-
-                    "bytes_sent":
-                        iface.get(
-                            "bytes_sent",
-                            0
-                        ),
-
-                    "bytes_recv":
-                        iface.get(
-                            "bytes_recv",
-                            0
-                        )
-
-                }
-
-        return result
     def get_process_list(self) -> list[ProcessEntryDict]:
-        """Snapshot of running processes (limited fields)."""
+        """Return the current process list from the engine state."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.PROCESSES_READ):
             return []
         state = self._state
         proc_container = state.get("processes", {})
-        proc_list = proc_container.get("metrics", []) if isinstance(proc_container, dict) else []
+        proc_list: list[dict[str, Any]] = []
+        if isinstance(proc_container, dict):
+            proc_list = proc_container.get("metrics", [])
+        elif isinstance(proc_container, list):
+            proc_list = proc_container
         result: list[ProcessEntryDict] = []
-        for proc in proc_list:
-            if isinstance(proc, dict):
+        for p in proc_list:
+            if isinstance(p, dict):
                 result.append(
                     ProcessEntryDict(
-                        pid=proc.get("pid", 0),  # type: ignore[arg-type]
-                        name=proc.get("name", ""),  # type: ignore[arg-type]
-                        cpu_percent=proc.get("cpu_percent", 0.0),  # type: ignore[arg-type]
-                        memory_info=proc.get("memory_rss", 0),  # type: ignore[arg-type]
-                        status=proc.get("status", ""),  # type: ignore[arg-type]
-                        num_threads=proc.get("num_threads", 0),  # type: ignore[arg-type]
-                        username=proc.get("username"),  # type: ignore[arg-type]
-                        ppid=proc.get("ppid"),  # type: ignore[arg-type]
-                        create_time=proc.get("create_time"),  # type: ignore[arg-type]
-                        exe=proc.get("exe"),  # type: ignore[arg-type]
+                        pid=p.get("pid", 0),
+                        name=p.get("name", ""),
+                        cpu_percent=p.get("cpu_percent", 0.0),
+                        memory_info=p.get("memory_rss", 0),
+                        status=p.get("status", ""),
+                        num_threads=p.get("num_threads", 0),
+                        username=p.get("username"),
+                        ppid=p.get("ppid"),
+                        create_time=p.get("create_time"),
+                        exe=p.get("exe"),
                     )
                 )
         return result
@@ -411,7 +376,7 @@ class EngineBridge(QObject):
         proc_container = state.get("processes", {})
         proc_list = proc_container.get("metrics", []) if isinstance(proc_container, dict) else []
         return SystemLoadDict(
-            cpu_percent=agg.get("usage_percent", 0.0),  # type: ignore[arg-type]
+            cpu_percent=agg.get("usage_percent", 0.0),
             processes=len(proc_list) if isinstance(proc_list, list) else 0,
             threads=0,
             handles=0,
@@ -421,56 +386,36 @@ class EngineBridge(QObject):
         """Static system info from the active driver (or defaults)."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.SYSTEM_READ):
-            return StaticInfoDict(
-                hostname="", os_name="", os_version="", architecture="",
-                cpu_brand="", cpu_physical_cores=0, cpu_logical_cores=0,
-                cpu_frequency_mhz=None, total_ram_bytes=0,
-                python_version="", boot_time="",
-            )
+            return StaticInfoDict()
         driver = self._driver
         static = None
         if driver is not None and hasattr(driver, "get_static_info"):
             try:
-                static = driver.get_static_info()  # type: ignore[union-attr, reportAttributeAccessIssue]
+                static = driver.get_static_info()
             except Exception:
                 pass
         if static is not None:
-            if hasattr(static, "model_dump"):
-                raw = static.model_dump()
-            else:
-                raw = dict(static)  # type: ignore[arg-type]
-            return StaticInfoDict(
-                hostname=raw.get("hostname", ""),
-                os_name=raw.get("os_name", ""),
-                os_version=raw.get("os_version", ""),
-                architecture=raw.get("architecture", ""),
-                cpu_brand=raw.get("cpu_brand", ""),
-                cpu_physical_cores=raw.get("cpu_physical_cores", 0),
-                cpu_logical_cores=raw.get("cpu_logical_cores", 0),
-                cpu_frequency_mhz=raw.get("cpu_frequency_mhz"),
-                total_ram_bytes=raw.get("total_ram_bytes", 0),
-                python_version=raw.get("python_version", ""),
-                boot_time=raw.get("boot_time", ""),
-            )
-        return StaticInfoDict(
-            hostname="",
-            os_name="",
-            os_version="",
-            architecture="",
-            cpu_brand="",
-            cpu_physical_cores=0,
-            cpu_logical_cores=0,
-            cpu_frequency_mhz=None,
-            total_ram_bytes=0,
-            python_version="",
-            boot_time="",
-        )
+            from backend.interfaces.caps import dump_static_info as _dump
+            return _dump(static)
+        return StaticInfoDict()
 
     def get_boot_time(self) -> float:
         """Boot timestamp as a float (or 0.0 when unavailable)."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.SYSTEM_READ):
             return 0.0
+        from backend.interfaces.caps import UnavailableInfo
+        driver = self._driver
+        if driver is not None:
+            try:
+                static = driver.get_static_info()
+                if static is not None:
+                    bt = static.system.boot_time
+                    if not isinstance(bt, UnavailableInfo):
+                        import datetime
+                        return datetime.datetime.fromisoformat(str(bt)).timestamp()
+            except Exception:
+                pass
         return 0.0
 
     def get_disk_partitions(self) -> list[dict[str, str]]:
@@ -491,56 +436,24 @@ class EngineBridge(QObject):
         ]
 
     def get_network_interfaces(self) -> dict[str, object]:
-        """
-        Returns network adapters:
-        name -> status, ip, mac
-        """
-
+        """Network interfaces from static info (or empty dict when unavailable)."""
         from backend.interfaces.enums import Permission
-
         if not self._check(Permission.NETWORK_READ):
             return {}
-
-        import psutil
-
-        result = {}
-
-        interfaces = psutil.net_if_addrs()
-
-        stats = psutil.net_if_stats()
-
-        for name, addresses in interfaces.items():
-
-            ip = "-"
-            mac = "-"
-
-            for addr in addresses:
-
-                # IPv4
-                if addr.family == 2:
-
-                    ip = addr.address
-
-
-                # MAC address
-                elif addr.family == psutil.AF_LINK:
-
-                    mac = addr.address
-
-            result[name] = {
-
-                "status":
-                    stats[name].isup
-                    if name in stats
-                    else False,
-
-                "ip": ip,
-
-                "mac": mac
-
-            }
-
-        return result
+        try:
+            static = self.get_static_info()
+            if static:
+                raw = static.get("network", {}).get("interfaces", [])
+                if raw:
+                    result: dict[str, object] = {}
+                    for iface in raw:
+                        name = iface.get("name", "")
+                        if name:
+                            result[name] = iface
+                    return result
+        except Exception:
+            pass
+        return {}
 
     def get_battery(self) -> BatteryDict:
         """Battery charge / status dict."""
@@ -555,9 +468,9 @@ class EngineBridge(QObject):
             metrics = bat_container.get("metrics", [{}])
             bat = metrics[0] if metrics else {}
             return BatteryDict(
-                percent=bat.get("percent", 0.0),  # type: ignore[arg-type]
-                power_plugged=bat.get("power_plugged"),  # type: ignore[arg-type]
-                seconds_left=bat.get("seconds_left"),  # type: ignore[arg-type]
+                percent=bat.get("percent", 0.0),
+                power_plugged=bat.get("power_plugged"),
+                seconds_left=bat.get("seconds_left"),
             )
         return BatteryDict(percent=0.0, power_plugged=None, seconds_left=None)
 
@@ -602,16 +515,66 @@ class EngineBridge(QObject):
         driver = self._driver
         if driver is not None and hasattr(driver, "manage_process"):
             try:
-                return bool(driver.manage_process(pid, action))  # type: ignore[union-attr, reportAttributeAccessIssue]
+                return bool(driver.manage_process(pid, action))
             except Exception:
                 pass
         return False
 
-    def get_history_snapshot(self, timestamp):
+    # ------------------------------------------------------------------
+    # Script management  (delegates to engine script API)
+    # ------------------------------------------------------------------
 
-        return self.history.database.get_before(
-            timestamp
-        )
+    def get_scripts(self) -> list[ScriptInfo]:
+        """Return metadata for all loaded scripts."""
+        from backend.interfaces.enums import Permission
+
+        if not self._check(Permission.SCRIPT_READ):
+            return []
+        if self._engine is None:
+            return []
+        try:
+            return self._engine.list_scripts()
+        except Exception:
+            return []
+
+    def set_script_mode(self, name: str, mode: ScriptExecutionMode) -> None:
+        """Change a script's execution mode by name."""
+        if self._engine is None:
+            return
+        try:
+            self._engine.set_script_execution_mode(name, mode)
+        except Exception:
+            pass
+
+    def set_script_permissions(
+        self, name: str, permissions: list[Permission]
+    ) -> None:
+        """Update a script's allowed permissions by name."""
+        if self._engine is None:
+            return
+        try:
+            self._engine.set_script_permissions(name, permissions)
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Config read/write  (delegates to engine config API)
+    # ------------------------------------------------------------------
+
+    def read_config(self) -> dict[str, Any]:
+        """Read the full config from the engine."""
+        if self._engine is None:
+            return {}
+        return self._engine.get_config()
+
+    def write_config(self, key: str, value: Any) -> None:
+        """Write a single config value through the engine."""
+        if self._engine is None:
+            raise RuntimeError("EngineBridge has no engine reference")
+        self._engine.set_config(key, value)
+        self.config_changed_signal.emit({key: value})
+
+
 # ------------------------------------------------------------------
 # Module-level singleton  —  caller must instantiate with a parent
 # ------------------------------------------------------------------

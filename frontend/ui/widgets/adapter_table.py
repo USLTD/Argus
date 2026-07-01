@@ -41,6 +41,9 @@ class AdapterTable(QTableWidget):
 
         if self.bridge:
             self.bridge.state_updated.connect(self.update_table)
+        else:
+            self.setRowCount(1)
+            self.setItem(0, 0, QTableWidgetItem("No interfaces"))
 
 
 
@@ -61,6 +64,11 @@ class AdapterTable(QTableWidget):
 
 
         self.setRowCount(len(adapters))
+
+
+        if not adapters:
+            self.setItem(0, 0, QTableWidgetItem("No interfaces"))
+            return
 
 
         for row, (name, info) in enumerate(adapters.items()):

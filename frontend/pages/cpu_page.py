@@ -27,7 +27,13 @@ class CPUPage(QWidget):
 
         self.core_graphs = []
 
-        for i in range(8):
+        if self._bridge is not None:
+            cpu = self._bridge.get_cpu_metrics()
+            core_count = cpu.get("logical_cores", 0) or len(cpu.get("per_core", [])) or 8
+        else:
+            core_count = 8
+
+        for i in range(core_count):
 
             graph = CPUGraph(bridge=self._bridge)
 

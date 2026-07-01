@@ -64,7 +64,7 @@ class OverviewPage(QWidget):
             "CPU Per Core"
         )
 
-        cores_layout = QVBoxLayout(
+        self.cores_layout = QVBoxLayout(
             cores_box
         )
 
@@ -72,7 +72,7 @@ class OverviewPage(QWidget):
         self.core_labels = []
         self.temp_labels = []
 
-        core_style = """
+        self.core_style = """
 
         QProgressBar {
 
@@ -94,12 +94,7 @@ class OverviewPage(QWidget):
 
         """
 
-        cpu = self._bridge.get_cpu_metrics()
-
-        core_count = cpu["logical_cores"]
-
-        if core_count == 0:
-            core_count = len(cpu["per_core"])
+        core_count = 8
 
         for i in range(core_count):
             row = QHBoxLayout()
@@ -113,7 +108,7 @@ class OverviewPage(QWidget):
             bar.setMaximum(100)
 
             bar.setStyleSheet(
-                core_style
+                self.core_style
             )
 
             usage_label = QLabel(
@@ -140,7 +135,7 @@ class OverviewPage(QWidget):
                 temp_label
             )
 
-            cores_layout.addLayout(
+            self.cores_layout.addLayout(
                 row
             )
 
@@ -538,9 +533,31 @@ class OverviewPage(QWidget):
     #                     )
     def update_cpu_cores(self):
 
+        if self._bridge is None:
+            return
+
         cpu = self._bridge.get_cpu_metrics()
 
         usage = cpu["per_core"]
+
+        # Expand core bars if needed
+        while len(usage) > len(self.core_bars):
+            i = len(self.core_bars)
+            row = QHBoxLayout()
+            core_name = QLabel(f"Core {i}")
+            bar = QProgressBar()
+            bar.setMaximum(100)
+            bar.setStyleSheet(self.core_style)
+            usage_label = QLabel("0%")
+            temp_label = QLabel("N/A°C")
+            row.addWidget(core_name)
+            row.addWidget(bar)
+            row.addWidget(usage_label)
+            row.addWidget(temp_label)
+            self.cores_layout.addLayout(row)
+            self.core_bars.append(bar)
+            self.core_labels.append(usage_label)
+            self.temp_labels.append(temp_label)
 
         for i, value in enumerate(usage):
 

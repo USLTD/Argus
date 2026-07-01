@@ -1,9 +1,7 @@
-import platform
 import socket
 import getpass
+import platform
 import datetime
-import cpuinfo  # type: ignore[import-untyped]
-import wmi  # type: ignore[import-untyped]
 
 from PyQt6.QtWidgets import (
     QWidget,
@@ -141,7 +139,7 @@ class SystemPage(QWidget):
 
 
 
-        cpu = cpuinfo.get_cpu_info()
+        static = self._bridge.get_static_info()
 
 
         freq = self._bridge.get_cpu_metrics()["frequency"]
@@ -151,8 +149,10 @@ class SystemPage(QWidget):
         data = {
 
             "CPU Model":
-            cpu.get(
-                "brand_raw",
+            static.get(
+                "cpu", {}
+            ).get(
+                "name",
                 "Unknown"
             ),
 
@@ -262,51 +262,47 @@ class SystemPage(QWidget):
         grid = QGridLayout(box)
 
 
-        try:
-
-            c = wmi.WMI()
-
-
-            gpus = c.Win32_VideoController()
+        static = self._bridge.get_static_info()
+        gpu_raw = static.get("gpu", {})
 
 
-
-            for gpu in gpus:
-
-
-                data = {
+        if gpu_raw and not gpu_raw.get("unavailable", False):
 
 
-                    "Name":
-                    gpu.Name,
+            data = {
 
 
-                    "Driver":
-                    gpu.DriverVersion,
+                "Name":
+                gpu_raw.get(
+                    "name",
+                    "Unknown"
+                ),
 
 
-                    "Video Memory":
-                    (
-                        f"{int(gpu.AdapterRAM)/(1024**3):.2f} GB"
-                        if gpu.AdapterRAM
-                        else "Unknown"
-                    ),
+                "Driver":
+                gpu_raw.get(
+                    "driver",
+                    "Unknown"
+                ),
 
 
-                    "Status":
-                    gpu.Status
+                "Video Memory":
+                (
+                    f"{gpu_raw.get('vram_bytes', 0) / (1024**3):.2f} GB"
+                    if gpu_raw.get("vram_bytes")
+                    else "Unknown"
+                ),
 
-                }
-
-
-                self.add_items(
-                    grid,
-                    data
-                )
+            }
 
 
+            self.add_items(
+                grid,
+                data
+            )
 
-        except Exception:
+
+        else:
 
 
             grid.addWidget(
@@ -338,35 +334,37 @@ class SystemPage(QWidget):
 
 
 
-        try:
+        static = self._bridge.get_static_info()
+        board_raw = static.get("motherboard", {})
 
 
-            c = wmi.WMI()
-
-
-
-            board = c.Win32_BaseBoard()[0]
-
-            bios = c.Win32_BIOS()[0]
-
+        if board_raw and not board_raw.get("unavailable", False):
 
 
             data = {
 
 
                 "Manufacturer":
-                board.Manufacturer,
+                board_raw.get(
+                    "manufacturer",
+                    "Unavailable"
+                ),
 
 
                 "Model":
-                board.Product,
+                board_raw.get(
+                    "model",
+                    "Unavailable"
+                ),
 
 
                 "BIOS Version":
-                bios.SMBIOSBIOSVersion
+                board_raw.get(
+                    "bios_version",
+                    "Unavailable"
+                ),
 
             }
-
 
 
             self.add_items(
@@ -375,8 +373,7 @@ class SystemPage(QWidget):
             )
 
 
-
-        except Exception:
+        else:
 
 
             grid.addWidget(
@@ -485,6 +482,8 @@ class SystemPage(QWidget):
                 0
             )
 
+            ip = "N/A"
+
             for addr in addresses:
 
                 if isinstance(addr, str):
@@ -497,6 +496,12 @@ class SystemPage(QWidget):
                     if addr.address:
                         ip = addr.address
 
+            grid.addWidget(
+                QLabel(str(ip)),
+                row,
+                1
+            )
+            break
 
 
         layout.addWidget(box)
