@@ -12,10 +12,20 @@ All fields can be overridden at runtime via environment variables with the
 from typing import Any
 
 import yaml
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
 
 from backend.core.paths import resolve_config_path
 from backend.interfaces.enums import CompatAction, ScriptExecutionMode
+
+_EXECUTION_MODE_NAMES: dict[str, ScriptExecutionMode] = {
+    "nonblocking": ScriptExecutionMode.NONBLOCKING,
+    "blocking": ScriptExecutionMode.BLOCKING,
+    "mixed": ScriptExecutionMode.MIXED,
+}
+_EXECUTION_MODE_REVERSE: dict[ScriptExecutionMode, str] = {
+    v: k for k, v in _EXECUTION_MODE_NAMES.items()
+}
 
 SUBSYSTEM_NAMES: list[str] = [
     "cpu", "memory", "disk", "network", "processes", "gpu", "sensors", "battery", "users"
@@ -42,6 +52,13 @@ class ArgusConfig(BaseSettings):
     subsystem_intervals: dict[str, int] = {k: 1000 for k in SUBSYSTEM_NAMES}
     subsystem_timeout: dict[str, int] = {k: 5000 for k in SUBSYSTEM_NAMES}
 
+    @field_validator("script_execution_mode", mode="before")
+    @classmethod
+    def _coerce_execution_mode(cls, v: object) -> object:
+        if isinstance(v, str):
+            return _EXECUTION_MODE_NAMES.get(v.lower(), ScriptExecutionMode.NONBLOCKING)
+        return v
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -63,6 +80,13 @@ class ArgusConfig(BaseSettings):
         path = resolve_config_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         data = self.model_dump(mode="json")
+        # Convert enum int -> lowercase string for human-readable YAML
+        mode_val = data.get("script_execution_mode")
+        if isinstance(mode_val, int):
+            try:
+                data["script_execution_mode"] = _EXECUTION_MODE_REVERSE[ScriptExecutionMode(mode_val)]
+            except (ValueError, KeyError):
+                pass
         if hasattr(self, "model_extra") and self.model_extra:
             data.update(self.model_extra)
         with path.open("w") as f:
