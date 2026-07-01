@@ -69,29 +69,17 @@ class TopToolbar(QToolBar):
 
         if self.current_theme == "light":
 
-            ThemeManager.apply_theme(
-                app,
-                "dark"
-            )
+            ThemeManager.apply_theme(app, "dark")
 
             self.current_theme = "dark"
-
-            self.theme_btn.setText(
-                "☀ Light Mode"
-            )
+            self.theme_btn.setText("☀ Light Mode")
 
         else:
 
-            ThemeManager.apply_theme(
-                app,
-                "light"
-            )
+            ThemeManager.apply_theme(app, "light")
 
             self.current_theme = "light"
-
-            self.theme_btn.setText(
-                "🌙 Dark Mode"
-            )
+            self.theme_btn.setText("🌙 Dark Mode")
 
     def update_time(self):
 
