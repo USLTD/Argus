@@ -5,10 +5,10 @@
 ## Quick Start
 
 ```bash
-pip install -e .
-# or via uv: uv sync
-python main_tui.py    # launch Textual TUI
-python main_gui.py    # launch PyQt6 GUI (requires PyQt6)
+uv sync
+uv run main_console.py # launch basic CLI
+uv run main_tui.py     # launch Textual TUI
+uv run main_gui.py     # launch PyQt6 GUI (requires PyQt6)
 ```
 
 ## Architecture

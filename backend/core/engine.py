@@ -824,6 +824,14 @@ class BackendEngine:
             raise ValueError(f"Unknown config field: {key}")
 
         field_info = ArgusConfig.model_fields[key]
+        if isinstance(value, str) and key == "script_execution_mode":
+            try:
+                value = ScriptExecutionMode[value.upper()]
+            except KeyError:
+                raise ValueError(
+                    f"Invalid value for '{key}': '{value}'. "
+                    f"Expected one of: nonblocking, blocking, mixed"
+                )
         ta = TypeAdapter(field_info.annotation)
         try:
             validated = ta.validate_python(value)
