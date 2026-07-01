@@ -222,6 +222,7 @@ class PerformancePage(QWidget):
 
         self.cpu_graph.refresh()
 
-        self.network_graph.refresh()
+        net = ctx.data.get("network", {})
+        self.network_graph.refresh(net)
 
         self.disk_graph.refresh()
