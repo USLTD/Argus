@@ -94,7 +94,12 @@ class OverviewPage(QWidget):
 
         """
 
-        core_count = self._bridge.get_cpu_metrics()["logical_cores"]
+        cpu = self._bridge.get_cpu_metrics()
+
+        core_count = cpu["logical_cores"]
+
+        if core_count == 0:
+            core_count = len(cpu["per_core"])
 
         for i in range(core_count):
             row = QHBoxLayout()
@@ -513,53 +518,66 @@ class OverviewPage(QWidget):
                 "D: Not Found"
             )
 
+    # def update_cpu_cores(self):
+    #
+    #     usage = self._bridge.get_cpu_metrics()["per_core"] or []
+    #
+    #     temperatures = []
+    #
+    #     try:
+    #
+    #         sensors = self._bridge.get_sensors()
+    #
+    #         if sensors:
+    #
+    #             for name, values in sensors.items():
+    #
+    #                 for value in values:
+    #                     temperatures.append(
+    #                         value
+    #                     )
     def update_cpu_cores(self):
 
-        usage = self._bridge.get_cpu_metrics()["per_core"] or []
+        cpu = self._bridge.get_cpu_metrics()
 
-        temperatures = []
-
-        try:
-
-            sensors = self._bridge.get_sensors()
-
-            if sensors:
-
-                for name, values in sensors.items():
-
-                    for value in values:
-                        temperatures.append(
-                            value
-                        )
-
-
-        except:
-
-            pass
+        usage = cpu["per_core"]
 
         for i, value in enumerate(usage):
 
-            if i < len(self.core_bars):
+            if i >= len(self.core_bars):
+                break
 
-                self.core_bars[i].setValue(
-                    int(value)
-                )
+            self.core_bars[i].setValue(int(value))
+            self.core_labels[i].setText(f"{value:.1f}%")
 
-                self.core_labels[i].setText(
-                    f"{value:.1f}%"
-                )
 
-                if i < len(temperatures):
-
-                    self.temp_labels[i].setText(
-                        f"{temperatures[i]:.0f}°C"
-                    )
-
-                else:
-
-                    self.temp_labels[i].setText(
-                        "N/A°C"
-                    )
+        # except:
+        #
+        #     pass
+        #
+        # for i, value in enumerate(usage):
+        #
+        #     if i < len(self.core_bars):
+        #
+        #         self.core_bars[i].setValue(
+        #             int(value)
+        #         )
+        #
+        #         self.core_labels[i].setText(
+        #             f"{value:.1f}%"
+        #         )
+        #
+        #         if i < len(temperatures):
+        #
+        #             self.temp_labels[i].setText(
+        #                 f"{temperatures[i]:.0f}°C"
+        #             )
+        #
+        #         else:
+        #
+        #             self.temp_labels[i].setText(
+        #                 "N/A°C"
+        #             )
 
     def update_system_load(self):
 
