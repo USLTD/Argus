@@ -1,23 +1,319 @@
+/* =====================================
+   ARGUS DARK THEME
+   Color-only theme
+   Keeps original Qt appearance
+   ===================================== */
+
+
+/* Main window */
 QMainWindow {
-    background:#1d1d1d;
+    background-color: #1d1d1d;
 }
 
+
+/* Global widgets */
 QWidget {
-    color:#dddddd;
-    font-size:11px;
+    background-color: #1d1d1d;
+    color: #dddddd;
+    font-size: 11px;
 }
 
-QFrame {
-    background:#2b2b2b;
-    border:1px solid #555;
+
+/* Labels */
+QLabel {
+    background-color: transparent;
+    color: #dddddd;
 }
+
+
+/* Frames / panels */
+QFrame {
+    background-color: #2b2b2b;
+    border: 1px solid #555555;
+}
+
+
+/* Group boxes */
+QGroupBox {
+    background-color: #2b2b2b;
+    color: #dddddd;
+    border: 1px solid #555555;
+}
+
+
+/* =====================================
+   INPUTS
+   ===================================== */
+
+QLineEdit {
+    background-color: #242424;
+    color: #dddddd;
+    border: 1px solid #555555;
+}
+
+
+QTextEdit,
+QPlainTextEdit,
+QTextBrowser {
+
+    background-color: #242424;
+    color: #dddddd;
+
+    border: 1px solid #555555;
+}
+
+
+/* =====================================
+   TABLES
+   ===================================== */
 
 QTableView,
-QTreeView {
-    background:#242424;
+QTableWidget {
+
+    background-color: #242424;
+    color: #dddddd;
+
+    border: 1px solid #555555;
+
+    gridline-color: #444444;
+
+    alternate-background-color: #2b2b2b;
 }
 
+
+QTableView::item,
+QTableWidget::item {
+
+    background-color: #242424;
+    color: #dddddd;
+}
+
+
+QTableView::item:selected,
+QTableWidget::item:selected {
+
+    background-color: #3a3a3a;
+    color: white;
+}
+
+
+/* Table headers */
+
 QHeaderView::section {
-    background:#333333;
-    border:1px solid #555;
+
+    background-color: #333333;
+
+    color: #dddddd;
+
+    border: 1px solid #555555;
+
+    padding: 4px;
+}
+
+
+QTableCornerButton::section {
+
+    background-color: #333333;
+
+    border: 1px solid #555555;
+}
+
+
+/* =====================================
+   TREE / LIST
+   ===================================== */
+
+QTreeView,
+QListView,
+QListWidget {
+
+    background-color: #242424;
+
+    color: #dddddd;
+
+    border: 1px solid #555555;
+}
+
+
+QTreeView::item:selected,
+QListView::item:selected,
+QListWidget::item:selected {
+
+    background-color: #3a3a3a;
+
+    color: white;
+}
+
+
+/* =====================================
+   COMBO BOX
+   ===================================== */
+
+QComboBox {
+
+    background-color: #242424;
+
+    color: #dddddd;
+
+    border: 1px solid #555555;
+}
+
+
+QComboBox QAbstractItemView {
+
+    background-color: #242424;
+
+    color: #dddddd;
+
+    selection-background-color: #3a3a3a;
+}
+
+
+/* =====================================
+   SPIN BOXES
+   ===================================== */
+
+QSpinBox,
+QDoubleSpinBox {
+
+    background-color: #242424;
+
+    color: #dddddd;
+
+    border: 1px solid #555555;
+}
+
+
+/* =====================================
+   TOOLBAR
+   ===================================== */
+
+QToolBar {
+
+    background-color: #1d1d1d;
+
+    border-bottom: 1px solid #555555;
+}
+
+
+/* =====================================
+   STATUS BAR
+   ===================================== */
+
+QStatusBar {
+
+    background-color: #1d1d1d;
+
+    color: #dddddd;
+}
+
+
+/* =====================================
+   TABS
+   ===================================== */
+
+QTabWidget::pane {
+
+    background-color: #1d1d1d;
+
+    border: 1px solid #555555;
+}
+
+
+QTabBar::tab {
+
+    background-color: #2b2b2b;
+
+    color: #dddddd;
+
+    border: 1px solid #555555;
+}
+
+
+QTabBar::tab:selected {
+
+    background-color: #444444;
+
+    color: white;
+}
+
+
+/* =====================================
+   SCROLL AREAS
+   ===================================== */
+
+QScrollArea,
+QAbstractScrollArea {
+
+    background-color: #1d1d1d;
+
+    color: #dddddd;
+}
+
+
+/* =====================================
+   SCROLL BARS
+   ===================================== */
+
+QScrollBar:vertical {
+
+    background-color: #1d1d1d;
+
+    width: 12px;
+}
+
+
+QScrollBar::handle:vertical {
+
+    background-color: #555555;
+}
+
+
+QScrollBar:horizontal {
+
+    background-color: #1d1d1d;
+
+    height: 12px;
+}
+
+
+QScrollBar::handle:horizontal {
+
+    background-color: #555555;
+}
+
+
+/* =====================================
+   MENUS
+   ===================================== */
+
+QMenu {
+
+    background-color: #242424;
+
+    color: #dddddd;
+
+    border: 1px solid #555555;
+}
+
+
+QMenu::item:selected {
+
+    background-color: #444444;
+
+    color: white;
+}
+
+
+/* =====================================
+   TOOL TIPS
+   ===================================== */
+
+QToolTip {
+
+    background-color: #333333;
+
+    color: white;
+
+    border: 1px solid #555555;
 }
