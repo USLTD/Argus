@@ -6,8 +6,12 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QLineEdit,
     QPushButton,
-    QLabel
+    QLabel,
+    QGroupBox,
+    QHBoxLayout
 )
+
+from PyQt6.QtCore import Qt
 
 
 class SettingsPage(QWidget):
@@ -18,16 +22,88 @@ class SettingsPage(QWidget):
 
         self.bridge = bridge
 
-        layout = QVBoxLayout(self)
+        self.setStyleSheet("""
+            QWidget {
+                font-size: 14px;
+            }
 
-        layout.addWidget(
-            QLabel("Argus Configuration")
+            QLabel#title {
+                font-size: 24px;
+                font-weight: bold;
+            }
+
+            QLabel#subtitle {
+                color: #777;
+            }
+
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding: 12px;
+            }
+
+            QLineEdit,
+            QSpinBox,
+            QComboBox {
+                padding: 6px;
+                border-radius: 5px;
+                border: 1px solid #aaa;
+            }
+
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                padding: 10px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+
+
+        main = QVBoxLayout(self)
+        main.setContentsMargins(25, 25, 25, 25)
+        main.setSpacing(15)
+
+
+        title = QLabel(
+            "Argus Configuration"
         )
 
-        form = QFormLayout()
+        title.setObjectName(
+            "title"
+        )
+
+        main.addWidget(title)
 
 
-        # driver_override
+        subtitle = QLabel(
+            "Configure drivers, scripts and monitoring behavior."
+        )
+
+        subtitle.setObjectName(
+            "subtitle"
+        )
+
+        main.addWidget(subtitle)
+
+
+
+        # -------------------------
+        # Engine Settings
+        # -------------------------
+
+        engine_box = QGroupBox(
+            "Engine Settings"
+        )
+
+        engine_form = QFormLayout()
+
 
         self.driver_override = QLineEdit()
 
@@ -35,13 +111,17 @@ class SettingsPage(QWidget):
             "Auto detect"
         )
 
-        form.addRow(
+        self.driver_override.setToolTip(
+            "Force Argus to use a specific driver."
+        )
+
+
+        engine_form.addRow(
             "Driver Override",
             self.driver_override
         )
 
 
-        # poll_interval_ms
 
         self.poll_interval = QSpinBox()
 
@@ -54,13 +134,38 @@ class SettingsPage(QWidget):
             1000
         )
 
-        form.addRow(
-            "Poll Interval (ms)",
+        self.poll_interval.setSuffix(
+            " ms"
+        )
+
+
+        engine_form.addRow(
+            "Refresh Interval",
             self.poll_interval
         )
 
 
-        # script_compatibility_default
+        engine_box.setLayout(
+            engine_form
+        )
+
+        main.addWidget(
+            engine_box
+        )
+
+
+
+        # -------------------------
+        # Script Settings
+        # -------------------------
+
+        script_box = QGroupBox(
+            "Script Runtime"
+        )
+
+        script_form = QFormLayout()
+
+
 
         self.script_compatibility = QComboBox()
 
@@ -71,13 +176,12 @@ class SettingsPage(QWidget):
             ]
         )
 
-        form.addRow(
-            "Script Compatibility",
+        script_form.addRow(
+            "Compatibility",
             self.script_compatibility
         )
 
 
-        # script_batch_size
 
         self.script_batch_size = QSpinBox()
 
@@ -90,13 +194,12 @@ class SettingsPage(QWidget):
             4
         )
 
-        form.addRow(
-            "Script Batch Size",
+        script_form.addRow(
+            "Batch Size",
             self.script_batch_size
         )
 
 
-        # script_timeout_ms
 
         self.script_timeout = QSpinBox()
 
@@ -109,13 +212,17 @@ class SettingsPage(QWidget):
             5000
         )
 
-        form.addRow(
-            "Script Timeout (ms)",
+        self.script_timeout.setSuffix(
+            " ms"
+        )
+
+
+        script_form.addRow(
+            "Timeout",
             self.script_timeout
         )
 
 
-        # script_execution_mode
 
         self.script_execution_mode = QComboBox()
 
@@ -131,13 +238,33 @@ class SettingsPage(QWidget):
             "nonblocking"
         )
 
-        form.addRow(
+
+        script_form.addRow(
             "Execution Mode",
             self.script_execution_mode
         )
 
 
-        # process_tick_interval
+        script_box.setLayout(
+            script_form
+        )
+
+        main.addWidget(
+            script_box
+        )
+
+
+
+        # -------------------------
+        # Performance
+        # -------------------------
+
+        performance_box = QGroupBox(
+            "Performance"
+        )
+
+        performance_form = QFormLayout()
+
 
         self.process_tick_interval = QSpinBox()
 
@@ -150,13 +277,34 @@ class SettingsPage(QWidget):
             5
         )
 
-        form.addRow(
+        performance_form.addRow(
             "Process Tick Interval",
             self.process_tick_interval
         )
 
 
-        layout.addLayout(form)
+        performance_box.setLayout(
+            performance_form
+        )
+
+        main.addWidget(
+            performance_box
+        )
+
+
+
+        # Save area
+
+        bottom = QHBoxLayout()
+
+        bottom.addStretch()
+
+
+        self.status = QLabel("")
+
+        bottom.addWidget(
+            self.status
+        )
 
 
         self.save_button = QPushButton(
@@ -167,8 +315,13 @@ class SettingsPage(QWidget):
             self.save_config
         )
 
-        layout.addWidget(
+        bottom.addWidget(
             self.save_button
+        )
+
+
+        main.addLayout(
+            bottom
         )
 
 
