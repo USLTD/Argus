@@ -74,8 +74,14 @@ _AND_OR_RE = re.compile(r"\s+(AND|OR)\s+")
 _IDENTIFIER_LAMBDA_MAP: dict[str, Callable[[str, CompatContext], object]] = {}
 
 
-def _reg(name: str) -> Callable[[Callable[[str, CompatContext], object]], Callable[[str, CompatContext], object]]:
-    def deco(fn: Callable[[str, CompatContext], object]) -> Callable[[str, CompatContext], object]:
+def _reg(
+    name: str,
+) -> Callable[
+    [Callable[[str, CompatContext], object]], Callable[[str, CompatContext], object]
+]:
+    def deco(
+        fn: Callable[[str, CompatContext], object],
+    ) -> Callable[[str, CompatContext], object]:
         _IDENTIFIER_LAMBDA_MAP[name] = fn
         return fn
 

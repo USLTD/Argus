@@ -46,7 +46,9 @@ class ScriptContext(Generic[T]):
 
     data: T
     config: ArgusConfig | None = None
-    db: DatabaseManager | None = None  # deprecated — will always be None after engine DB decoupling (Phase 3)
+    db: DatabaseManager | None = (
+        None  # deprecated — will always be None after engine DB decoupling (Phase 3)
+    )
     driver: DriverProxy | BaseDriver | None = None
 
 
@@ -144,6 +146,7 @@ class UserTickData(TypedDict):
 
 class GeneralTickData(TypedDict):
     """Full system state — only TypedDict with `extra` catch-all."""
+
     cpu: CpuTickData
     ram: MemoryTickData
     processes: list[ProcessTickData] | None

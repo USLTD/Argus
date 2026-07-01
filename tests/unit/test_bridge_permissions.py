@@ -41,8 +41,11 @@ class TestSyncBridgePermissions:
         bridge.tick_all()
         data = bridge.get_cpu_metrics()
         assert data == {
-            "cpu_percent": 0.0, "per_core": [], "frequency": None,
-            "physical_cores": 0, "logical_cores": 0,
+            "cpu_percent": 0.0,
+            "per_core": [],
+            "frequency": None,
+            "physical_cores": 0,
+            "logical_cores": 0,
         }
 
     def test_cpu_permission_grants_cpu(self, fake_driver: FakeDriver) -> None:
@@ -247,8 +250,11 @@ class TestAsyncBridgePermissions:
         await bridge.tick_all()
         data = await bridge.get_cpu_metrics()
         assert data == {
-            "cpu_percent": 0.0, "per_core": [], "frequency": None,
-            "physical_cores": 0, "logical_cores": 0,
+            "cpu_percent": 0.0,
+            "per_core": [],
+            "frequency": None,
+            "physical_cores": 0,
+            "logical_cores": 0,
         }
 
     @pytest.mark.asyncio
@@ -322,7 +328,9 @@ class TestAsyncBridgePermissions:
         assert info == {}
 
     @pytest.mark.asyncio
-    async def test_system_read_grants_static_info(self, fake_driver: FakeDriver) -> None:
+    async def test_system_read_grants_static_info(
+        self, fake_driver: FakeDriver
+    ) -> None:
         """Async bridge with SYSTEM.READ returns static info."""
         from backend.bridges.async_bridge import AsyncBridge
 
@@ -369,9 +377,22 @@ class TestEngineBridgePermissions:
         EngineBridge = self._import_bridge()
         bridge = EngineBridge(engine=None, permissions=set())
         cpu = bridge.get_cpu_metrics()
-        assert cpu == {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
+        assert cpu == {
+            "cpu_percent": 0.0,
+            "per_core": [],
+            "frequency": None,
+            "physical_cores": 0,
+            "logical_cores": 0,
+        }
         mem = bridge.get_memory_metrics()
-        assert mem == {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+        assert mem == {
+            "total": 0,
+            "used": 0,
+            "available": 0,
+            "free": 0,
+            "cached": 0,
+            "percent": 0.0,
+        }
 
     def test_cpu_permission(self) -> None:
         """Engine bridge with CPU.READ returns default cpu (engine=None)."""

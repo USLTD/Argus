@@ -28,7 +28,15 @@ _EXECUTION_MODE_REVERSE: dict[ScriptExecutionMode, str] = {
 }
 
 SUBSYSTEM_NAMES: list[str] = [
-    "cpu", "memory", "disk", "network", "processes", "gpu", "sensors", "battery", "users"
+    "cpu",
+    "memory",
+    "disk",
+    "network",
+    "processes",
+    "gpu",
+    "sensors",
+    "battery",
+    "users",
 ]
 
 
@@ -44,10 +52,19 @@ class ArgusConfig(BaseSettings):
     script_batch_size: int = 4
     script_timeout_ms: int = 5000
     script_execution_mode: ScriptExecutionMode = ScriptExecutionMode.NONBLOCKING
-    process_tick_interval: int = 5  # Collect processes every N ticks (default 5 = ~5s at 1s poll)
+    process_tick_interval: int = (
+        5  # Collect processes every N ticks (default 5 = ~5s at 1s poll)
+    )
     subsystem_enabled: dict[str, bool] = {
-        "cpu": True, "memory": True, "disk": True, "network": True,
-        "processes": True, "gpu": True, "sensors": True, "battery": True, "users": True,
+        "cpu": True,
+        "memory": True,
+        "disk": True,
+        "network": True,
+        "processes": True,
+        "gpu": True,
+        "sensors": True,
+        "battery": True,
+        "users": True,
     }
     subsystem_intervals: dict[str, int] = {k: 1000 for k in SUBSYSTEM_NAMES}
     subsystem_timeout: dict[str, int] = {k: 5000 for k in SUBSYSTEM_NAMES}
@@ -84,8 +101,10 @@ class ArgusConfig(BaseSettings):
         mode_val = data.get("script_execution_mode")
         if isinstance(mode_val, int):
             try:
-                data["script_execution_mode"] = _EXECUTION_MODE_REVERSE[ScriptExecutionMode(mode_val)]
-            except (ValueError, KeyError):
+                data["script_execution_mode"] = _EXECUTION_MODE_REVERSE[
+                    ScriptExecutionMode(mode_val)
+                ]
+            except ValueError, KeyError:
                 pass
         if hasattr(self, "model_extra") and self.model_extra:
             data.update(self.model_extra)

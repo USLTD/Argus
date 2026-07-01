@@ -109,8 +109,8 @@ class PythonScriptWrapper(BaseUserScript):
             else:
                 sys.modules["argus"] = old_mod
 
-        self._lifecycle_callbacks, self._event_callbacks = (
-            extract_registered_callbacks(self._argus_mod)
+        self._lifecycle_callbacks, self._event_callbacks = extract_registered_callbacks(
+            self._argus_mod
         )
         self._loaded = True
 
@@ -121,7 +121,9 @@ class PythonScriptWrapper(BaseUserScript):
         self.load()
         cb = self._lifecycle_callbacks.get("lifecycle.on_load")
         if cb:
-            perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
+            perms = (
+                set(self.METADATA.get("permissions", [])) if self.METADATA else set()
+            )
             proxy = DriverProxy(getattr(ctx, "driver", None), perms, meta=self.METADATA)
             script_ctx = _ScriptContext[None](
                 data=None,
@@ -137,7 +139,9 @@ class PythonScriptWrapper(BaseUserScript):
 
         cb = self._lifecycle_callbacks.get("lifecycle.on_unload")
         if cb:
-            perms = set(self.METADATA.get("permissions", [])) if self.METADATA else set()
+            perms = (
+                set(self.METADATA.get("permissions", [])) if self.METADATA else set()
+            )
             proxy = DriverProxy(getattr(ctx, "driver", None), perms, meta=self.METADATA)
             script_ctx = _ScriptContext[None](
                 data=None,

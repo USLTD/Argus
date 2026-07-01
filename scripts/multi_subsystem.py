@@ -8,7 +8,10 @@ import argus
 
 if TYPE_CHECKING:
     from backend.interfaces.contexts import (
-        CpuTickData, GeneralTickData, MemoryTickData, ScriptContext,
+        CpuTickData,
+        GeneralTickData,
+        MemoryTickData,
+        ScriptContext,
     )
 
 METADATA: argus.script.Metadata = {

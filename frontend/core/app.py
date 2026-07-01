@@ -6,7 +6,6 @@ from frontend.ui.main_window import MainWindow
 
 
 class ArgusApplication:
-
     def __init__(self, app, engine=None):
 
         self.app = app

@@ -13,7 +13,11 @@ from backend.core.python_script import PythonScriptWrapper
 from backend.core.sandbox import LuaScriptWrapper
 from backend.interfaces.enums import CompatAction, ConfidenceScore
 from backend.interfaces.plugins import BaseDriver, BaseUserScript, PluginMeta
-from backend.interfaces.rules import CompatContext, evaluate_compatible, evaluate_script_compatible
+from backend.interfaces.rules import (
+    CompatContext,
+    evaluate_compatible,
+    evaluate_script_compatible,
+)
 from backend.storage.config import ArgusConfig
 
 T = TypeVar("T", bound=BaseDriver)
@@ -44,7 +48,9 @@ class DiscoveryLoader:
         self.active_scripts: list[BaseUserScript] = []
         self.all_candidates: list[DriverCandidate] = []
 
-    def soft_reload(self, compat_ctx: CompatContext | None = None, config: ArgusConfig | None = None) -> None:
+    def soft_reload(
+        self, compat_ctx: CompatContext | None = None, config: ArgusConfig | None = None
+    ) -> None:
         """Flush cache and reload highest-ranked driver and all compatible scripts."""
         self.active_scripts.clear()
         self.all_candidates.clear()
@@ -99,7 +105,9 @@ class DiscoveryLoader:
                     best_module = module
 
         if best_cls and best_module:
-            if self.active_driver is not None and getattr(self.active_driver, "_initialized", False):
+            if self.active_driver is not None and getattr(
+                self.active_driver, "_initialized", False
+            ):
                 self.active_driver.dispose()
             self.active_driver = best_cls()
             for c in self.all_candidates:
@@ -132,7 +140,10 @@ class DiscoveryLoader:
                 result = evaluate_script_compatible(compatible_rules, compat_ctx)  # type: ignore[arg-type]
                 if result is not None and not result:
                     continue
-                if result is None and config.script_compatibility_default != CompatAction.LOAD:
+                if (
+                    result is None
+                    and config.script_compatibility_default != CompatAction.LOAD
+                ):
                     continue
                 wrapper = PythonScriptWrapper(py_file, meta)
                 wrapper.bind_driver(self.active_driver)
@@ -159,6 +170,7 @@ class DiscoveryLoader:
             return None
 
         return (module, driver_cls)
+
 
 # ------------------------------------------------------------------
 # AST-based METADATA extraction for Python scripts (no execution)

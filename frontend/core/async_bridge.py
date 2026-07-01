@@ -86,7 +86,13 @@ class AsyncBridge:
             await self.tick_all()
         snap = self._snapshot
         if snap is None or isinstance(snap.cpu, Unavailable):
-            return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
+            return {
+                "cpu_percent": 0.0,
+                "per_core": [],
+                "frequency": None,
+                "physical_cores": 0,
+                "logical_cores": 0,
+            }
         static = self._driver.get_static_info()
         if static is not None:
             raw_cores = static.cpu.physical_cores
@@ -107,7 +113,14 @@ class AsyncBridge:
             await self.tick_all()
         snap = self._snapshot
         if snap is None or isinstance(snap.memory, Unavailable):
-            return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+            return {
+                "total": 0,
+                "used": 0,
+                "available": 0,
+                "free": 0,
+                "cached": 0,
+                "percent": 0.0,
+            }
         return memory_collection_to_dict(snap.memory)
 
     async def get_disk_usage(self, path: str = "/") -> dict:
@@ -205,7 +218,15 @@ class AsyncBridge:
         await self.tick_all()
         snap = self._snapshot
         if snap is None:
-            return {"cpu": {}, "memory": {}, "disk": {}, "network": {}, "processes": [], "sensors": {}, "battery": {}}
+            return {
+                "cpu": {},
+                "memory": {},
+                "disk": {},
+                "network": {},
+                "processes": [],
+                "sensors": {},
+                "battery": {},
+            }
 
         u = Unavailable
         cpu: dict
@@ -220,15 +241,40 @@ class AsyncBridge:
                 threads = raw_threads if isinstance(raw_threads, int) else 0
             else:
                 cores = threads = 0
-            cpu = cpu_collection_to_dict(snap.cpu, static_cores=cores, static_threads=threads)
-        memory = {} if isinstance(snap.memory, u) else memory_collection_to_dict(snap.memory)
+            cpu = cpu_collection_to_dict(
+                snap.cpu, static_cores=cores, static_threads=threads
+            )
+        memory = (
+            {} if isinstance(snap.memory, u) else memory_collection_to_dict(snap.memory)
+        )
         disk = {} if isinstance(snap.disk, u) else disk_collection_to_dict(snap.disk)
-        network = {} if isinstance(snap.network, u) else network_collection_to_dict(snap.network)
-        processes = [] if isinstance(snap.processes, u) else process_collection_to_dict(snap.processes)
-        sensors = {} if isinstance(snap.sensors, u) else sensor_collection_to_dict(snap.sensors)
-        battery = {} if isinstance(snap.battery, u) else battery_collection_to_dict(snap.battery)
+        network = (
+            {}
+            if isinstance(snap.network, u)
+            else network_collection_to_dict(snap.network)
+        )
+        processes = (
+            []
+            if isinstance(snap.processes, u)
+            else process_collection_to_dict(snap.processes)
+        )
+        sensors = (
+            {}
+            if isinstance(snap.sensors, u)
+            else sensor_collection_to_dict(snap.sensors)
+        )
+        battery = (
+            {}
+            if isinstance(snap.battery, u)
+            else battery_collection_to_dict(snap.battery)
+        )
 
         return {
-            "cpu": cpu, "memory": memory, "disk": disk, "network": network,
-            "processes": processes, "sensors": sensors, "battery": battery,
+            "cpu": cpu,
+            "memory": memory,
+            "disk": disk,
+            "network": network,
+            "processes": processes,
+            "sensors": sensors,
+            "battery": battery,
         }

@@ -119,9 +119,7 @@ class TestAsyncDispatchModes:
 
     def test_nonblocking_does_not_block_tick(self, fake_engine: BackendEngine) -> None:
         """NONBLOCKING dispatch submits to the thread pool and returns immediately."""
-        script = FakeScript(
-            delay=0.3, execution_mode=ScriptExecutionMode.NONBLOCKING
-        )
+        script = FakeScript(delay=0.3, execution_mode=ScriptExecutionMode.NONBLOCKING)
         fake_engine.loader.active_scripts = [script]  # type: ignore[assignment]
 
         start = time.monotonic()
@@ -129,9 +127,7 @@ class TestAsyncDispatchModes:
         elapsed = time.monotonic() - start
 
         # The main thread should return long before the script's sleep completes
-        assert elapsed < 0.2, (
-            f"NONBLOCKING tick took {elapsed:.3f}s, expected < 0.2s"
-        )
+        assert elapsed < 0.2, f"NONBLOCKING tick took {elapsed:.3f}s, expected < 0.2s"
 
         # Wait for the background dispatch to finish, then verify events
         self._wait_for_futures(fake_engine)
@@ -141,9 +137,7 @@ class TestAsyncDispatchModes:
 
     def test_blocking_blocks_tick(self, fake_engine: BackendEngine) -> None:
         """BLOCKING dispatch runs synchronously and waits for every event."""
-        script = FakeScript(
-            delay=0.08, execution_mode=ScriptExecutionMode.BLOCKING
-        )
+        script = FakeScript(delay=0.08, execution_mode=ScriptExecutionMode.BLOCKING)
         fake_engine.loader.active_scripts = [script]  # type: ignore[assignment]
 
         start = time.monotonic()
@@ -152,20 +146,14 @@ class TestAsyncDispatchModes:
 
         # The tick should have waited for every dispatch call (each sleeps)
         # With 7 non-None events × 0.08s ≈ 0.56s; assert at least 0.05s
-        assert elapsed >= 0.05, (
-            f"BLOCKING tick took {elapsed:.3f}s, expected ≥ 0.05s"
-        )
+        assert elapsed >= 0.05, f"BLOCKING tick took {elapsed:.3f}s, expected ≥ 0.05s"
         assert len(script._dispatched_events) > 0
 
     # -- Test 3: MIXED (short timeout – runs inline) ---------------------
 
-    def test_mixed_short_timeout_runs_inline(
-        self, fake_engine: BackendEngine
-    ) -> None:
+    def test_mixed_short_timeout_runs_inline(self, fake_engine: BackendEngine) -> None:
         """MIXED dispatch runs inline when the script finishes within its timeout."""
-        script = FakeScript(
-            delay=0.01, execution_mode=ScriptExecutionMode.MIXED
-        )
+        script = FakeScript(delay=0.01, execution_mode=ScriptExecutionMode.MIXED)
         fake_engine.loader.active_scripts = [script]  # type: ignore[assignment]
         # Reminder: script_timeout_ms defaults to 5000 – very generous
 
@@ -174,9 +162,7 @@ class TestAsyncDispatchModes:
         elapsed = time.monotonic() - start
 
         # With 7 non-None events × 0.01s ≈ 0.07s, plus overhead
-        assert elapsed < 0.2, (
-            f"MIXED tick took {elapsed:.3f}s, expected < 0.2s"
-        )
+        assert elapsed < 0.2, f"MIXED tick took {elapsed:.3f}s, expected < 0.2s"
         assert len(script._dispatched_events) > 0
 
         # The future completed inline, so it must NOT be in _futures
@@ -213,9 +199,7 @@ class TestAsyncDispatchModes:
         self, fake_engine: BackendEngine
     ) -> None:
         """Changing a script's execution mode takes effect on the next tick."""
-        script = FakeScript(
-            delay=0.08, execution_mode=ScriptExecutionMode.NONBLOCKING
-        )
+        script = FakeScript(delay=0.08, execution_mode=ScriptExecutionMode.NONBLOCKING)
         fake_engine.loader.active_scripts = [script]  # type: ignore[assignment]
 
         # Switch to BLOCKING

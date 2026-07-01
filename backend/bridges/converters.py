@@ -10,9 +10,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from backend.interfaces.caps import (
-        BatteryMetric, CPUMetric, MemoryMetric,
-        MetricsCollection, NetworkMetric, ProcessMetric,
-        SensorMetric, StorageMetric,
+        BatteryMetric,
+        CPUMetric,
+        MemoryMetric,
+        MetricsCollection,
+        NetworkMetric,
+        ProcessMetric,
+        SensorMetric,
+        StorageMetric,
     )
     from backend.interfaces.sentinels import Unavailable as UnavailableType
 
@@ -23,10 +28,11 @@ def cpu_collection_to_dict(
     static_threads: int = 0,
 ) -> dict:
     """Convert CPU MetricsCollection + static info → flat dict.
-    
+
     If Unavailable, returns zero-filled dict.
     """
     from backend.interfaces.sentinels import Unavailable
+
     if isinstance(cpu, Unavailable):
         return {
             "cpu_percent": 0.0,
@@ -52,11 +58,26 @@ def memory_collection_to_dict(
 ) -> dict:
     """Convert Memory MetricsCollection → flat dict."""
     from backend.interfaces.sentinels import Unavailable
+
     if isinstance(memory, Unavailable):
-        return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+        return {
+            "total": 0,
+            "used": 0,
+            "available": 0,
+            "free": 0,
+            "cached": 0,
+            "percent": 0.0,
+        }
     m = memory.metrics[0] if memory.metrics else None
     if m is None:
-        return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+        return {
+            "total": 0,
+            "used": 0,
+            "available": 0,
+            "free": 0,
+            "cached": 0,
+            "percent": 0.0,
+        }
     return {
         "total": m.total_bytes,
         "used": m.used_bytes,
@@ -73,6 +94,7 @@ def disk_collection_to_dict(
 ) -> dict:
     """Find the disk entry for *mount_point*, return as flat dict."""
     from backend.interfaces.sentinels import Unavailable
+
     if isinstance(disk, Unavailable):
         return {"total": 0, "used": 0, "free": 0, "percent": 0.0}
     for d in disk.metrics:
@@ -91,6 +113,7 @@ def network_collection_to_dict(
 ) -> dict:
     """Aggregate all interfaces into bytes_sent / bytes_recv."""
     from backend.interfaces.sentinels import Unavailable
+
     if isinstance(network, Unavailable):
         return {"bytes_sent": 0, "bytes_recv": 0}
     total_sent = sum(m.bytes_sent for m in network.metrics)
@@ -103,22 +126,25 @@ def process_collection_to_dict(
 ) -> list[dict]:
     """Convert processes collection → list of flat dicts."""
     from backend.interfaces.sentinels import Unavailable
+
     if isinstance(processes, Unavailable):
         return []
     result = []
     for p in processes.metrics:
-        result.append({
-            "pid": p.pid,
-            "name": p.name,
-            "cpu_percent": p.cpu_percent,
-            "memory_info": p.memory_rss,
-            "status": p.status,
-            "num_threads": 0,
-            "username": p.username,
-            "ppid": None,
-            "create_time": None,
-            "exe": None,
-        })
+        result.append(
+            {
+                "pid": p.pid,
+                "name": p.name,
+                "cpu_percent": p.cpu_percent,
+                "memory_info": p.memory_rss,
+                "status": p.status,
+                "num_threads": 0,
+                "username": p.username,
+                "ppid": None,
+                "create_time": None,
+                "exe": None,
+            }
+        )
     return result
 
 
@@ -127,6 +153,7 @@ def sensor_collection_to_dict(
 ) -> dict:
     """Group sensors by name → list of values."""
     from backend.interfaces.sentinels import Unavailable
+
     if isinstance(sensors, Unavailable):
         return {"temperatures": {}}
     temps: dict[str, list[float]] = {}
@@ -140,6 +167,7 @@ def battery_collection_to_dict(
 ) -> dict:
     """Convert battery collection → flat dict."""
     from backend.interfaces.sentinels import Unavailable
+
     if isinstance(battery, Unavailable):
         return {"percent": 0.0, "power_plugged": None, "seconds_left": None}
     b = battery.metrics[0] if battery.metrics else None

@@ -1,17 +1,10 @@
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar
-)
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
 
 from backend.interfaces.contexts import BridgeContext
 from frontend.core.engine_bridge import EngineBridge
 
 
 class CPUPerCoreWidget(QWidget):
-
     def __init__(self, bridge: EngineBridge | None = None) -> None:
         super().__init__()
 
@@ -24,7 +17,6 @@ class CPUPerCoreWidget(QWidget):
         cores = self._bridge.get_cpu_metrics()["logical_cores"] if self._bridge else 0
 
         for i in range(cores):
-
             row = QHBoxLayout()
 
             core_label = QLabel(f"Core {i}")
@@ -45,14 +37,7 @@ class CPUPerCoreWidget(QWidget):
 
             self._core_layout.addLayout(row)
 
-            self.rows.append(
-                (
-                    bar,
-                    load_label,
-                    avg_label,
-                    temp_label
-                )
-            )
+            self.rows.append((bar, load_label, avg_label, temp_label))
 
         if self._bridge:
             self._bridge.state_updated.connect(self._on_state)
@@ -65,13 +50,12 @@ class CPUPerCoreWidget(QWidget):
         usage = self._bridge.get_cpu_metrics()["per_core"] or []
 
         for i, value in enumerate(usage):
-
             bar, load, avg, temp = self.rows[i]
 
             bar.setValue(int(value))
 
             load.setText(f"{value:.0f}%")
 
-            avg.setText(f"{value/100:.2f}")
+            avg.setText(f"{value / 100:.2f}")
 
             temp.setText("--°C")

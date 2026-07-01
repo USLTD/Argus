@@ -1,10 +1,4 @@
-from PyQt6.QtWidgets import (
-    QToolBar,
-    QLineEdit,
-    QLabel,
-    QPushButton,
-    QApplication
-)
+from PyQt6.QtWidgets import QToolBar, QLineEdit, QLabel, QPushButton, QApplication
 
 from PyQt6.QtCore import QTimer
 from datetime import datetime
@@ -13,7 +7,6 @@ from frontend.core.theme_manager import ThemeManager
 
 
 class TopToolbar(QToolBar):
-
     def __init__(self, user=None):
 
         super().__init__()
@@ -29,20 +22,14 @@ class TopToolbar(QToolBar):
         self.export_btn = QPushButton("Export")
         self.theme_btn = QPushButton("🌙 Dark Mode")
 
-        self.theme_btn.clicked.connect(
-            self.toggle_theme
-        )
+        self.theme_btn.clicked.connect(self.toggle_theme)
 
         self.time_label = QLabel()
 
         if user:
-            self.user_label = QLabel(
-                f"{user.username} ({user.role})"
-            )
+            self.user_label = QLabel(f"{user.username} ({user.role})")
         else:
-            self.user_label = QLabel(
-                "Guest"
-            )
+            self.user_label = QLabel("Guest")
 
         self.addWidget(self.search)
         self.addWidget(self.refresh_btn)
@@ -68,14 +55,12 @@ class TopToolbar(QToolBar):
         app = QApplication.instance()
 
         if self.current_theme == "light":
-
             ThemeManager.apply_theme(app, "dark")
 
             self.current_theme = "dark"
             self.theme_btn.setText("☀ Light Mode")
 
         else:
-
             ThemeManager.apply_theme(app, "light")
 
             self.current_theme = "light"
@@ -83,8 +68,4 @@ class TopToolbar(QToolBar):
 
     def update_time(self):
 
-        self.time_label.setText(
-            datetime.now().strftime(
-                "%H:%M:%S"
-            )
-        )
+        self.time_label.setText(datetime.now().strftime("%H:%M:%S"))

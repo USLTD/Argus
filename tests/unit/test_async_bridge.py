@@ -112,8 +112,13 @@ class TestAsyncBridgeGetAll:
         data = await bridge.get_all()
 
         expected_keys = {
-            "cpu", "memory", "disk", "network",
-            "processes", "sensors", "battery",
+            "cpu",
+            "memory",
+            "disk",
+            "network",
+            "processes",
+            "sensors",
+            "battery",
         }
         assert expected_keys.issubset(data.keys())
 
@@ -140,7 +145,9 @@ class TestAsyncBridgeStaticInfo:
     """Verify async get_static_info() returns a nested dict."""
 
     @pytest.mark.asyncio
-    async def test_get_static_info_returns_nested_dict(self, fake_driver: FakeDriver) -> None:
+    async def test_get_static_info_returns_nested_dict(
+        self, fake_driver: FakeDriver
+    ) -> None:
         """get_static_info returns a dict (FakeDriver returns None → empty dict)."""
         from backend.bridges.async_bridge import AsyncBridge
 
@@ -218,7 +225,9 @@ class TestAsyncBridgeEdgeCases:
     """Edge-case tests: initial state, auto-tick, permissions."""
 
     @pytest.mark.asyncio
-    async def test_snapshot_is_none_before_first_tick(self, fake_driver: FakeDriver) -> None:
+    async def test_snapshot_is_none_before_first_tick(
+        self, fake_driver: FakeDriver
+    ) -> None:
         """Internal _snapshot is None and snapshot property returns None before any tick."""
         from backend.bridges.async_bridge import AsyncBridge
 
@@ -254,16 +263,28 @@ class TestAsyncBridgeEdgeCases:
         bridge = AsyncBridge(fake_driver, permissions=set())
         cpu = await bridge.get_cpu_metrics()
         assert cpu == {
-            "cpu_percent": 0.0, "per_core": [], "frequency": None,
-            "physical_cores": 0, "logical_cores": 0,
+            "cpu_percent": 0.0,
+            "per_core": [],
+            "frequency": None,
+            "physical_cores": 0,
+            "logical_cores": 0,
         }
         mem = await bridge.get_memory_metrics()
-        assert mem == {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+        assert mem == {
+            "total": 0,
+            "used": 0,
+            "available": 0,
+            "free": 0,
+            "cached": 0,
+            "percent": 0.0,
+        }
         procs = await bridge.get_process_list()
         assert procs == []
 
     @pytest.mark.asyncio
-    async def test_permission_gated_individual_methods(self, fake_driver: FakeDriver) -> None:
+    async def test_permission_gated_individual_methods(
+        self, fake_driver: FakeDriver
+    ) -> None:
         """Only CPU_READ granted returns CPU data, other methods return defaults."""
         from backend.bridges.async_bridge import AsyncBridge
 

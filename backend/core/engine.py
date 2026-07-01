@@ -21,12 +21,22 @@ if TYPE_CHECKING:
     from backend.interfaces.contexts import ScriptContext
     from backend.interfaces.sentinels import TickSnapshot, Unavailable
     from backend.interfaces.caps import (
-        BatteryMetric, CPUMetric, GPUMetric, MemoryMetric,
-        MetricsCollection, NetworkMetric, ProcessMetric,
-        SensorMetric, StorageMetric, SystemCapabilities, SystemMetrics, UserMetric,
+        BatteryMetric,
+        CPUMetric,
+        GPUMetric,
+        MemoryMetric,
+        MetricsCollection,
+        NetworkMetric,
+        ProcessMetric,
+        SensorMetric,
+        StorageMetric,
+        SystemCapabilities,
+        SystemMetrics,
+        UserMetric,
     )
     from backend.interfaces.enums import (
-        ConfidenceScore, Permission,
+        ConfidenceScore,
+        Permission,
     )
     from backend.interfaces.plugins import BaseUserScript
 
@@ -61,6 +71,7 @@ class DriverInfo(TypedDict):
 
 class DriverStatus(TypedDict):
     """Detailed status for a discovered driver candidate."""
+
     name: str
     class_name: str
     is_active: bool
@@ -72,6 +83,7 @@ class DriverStatus(TypedDict):
 
 class ScriptStatus(TypedDict):
     """Detailed status for a loaded user script."""
+
     name: str
     path: str
     type: str  # "lua" or "python"
@@ -92,8 +104,15 @@ def _error_snapshot(msg: str = "No driver loaded") -> "TickSnapshot":
     if _ERROR_SNAPSHOT is None:
         u = Unavailable("error", msg)
         _ERROR_SNAPSHOT = TickSnapshot(
-            cpu=u, memory=u, processes=u, disk=u, network=u,
-            gpu=u, sensors=u, battery=u, users=u,
+            cpu=u,
+            memory=u,
+            processes=u,
+            disk=u,
+            network=u,
+            gpu=u,
+            sensors=u,
+            battery=u,
+            users=u,
         )
     return _ERROR_SNAPSHOT
 
@@ -160,7 +179,9 @@ def _to_script_data(
     if hasattr(val, "model_dump"):
         return val.model_dump()  # type: ignore[return-value]
     if isinstance(val, list):
-        return [item.model_dump() if hasattr(item, "model_dump") else item for item in val]
+        return [
+            item.model_dump() if hasattr(item, "model_dump") else item for item in val
+        ]
     return val
 
 
@@ -181,8 +202,6 @@ def _snapshot_to_general_dict(
         "users": _to_script_data(snapshot.users, "users"),
         "extra": {},
     }
-
-
 
 
 def _build_event_dispatch(
@@ -224,7 +243,9 @@ class BackendEngine:
         self._last_tick_duration: float = 0.0
         self._last_tick_times: dict[str, float] = {}
         self._process_tick_counter: int = 0
-        self._last_process_snapshot: MetricsCollection[ProcessMetric] | Unavailable | None = None
+        self._last_process_snapshot: (
+            MetricsCollection[ProcessMetric] | Unavailable | None
+        ) = None
         self._executor = ThreadPoolExecutor(max_workers=self.config.script_batch_size)
         self._futures: list[Future] = []
         self._lock = threading.Lock()
@@ -502,7 +523,9 @@ class BackendEngine:
         for name in subsystems:
             enabled = self.config.subsystem_enabled.get(name, True)
             if not enabled:
-                result[name] = Unavailable("disabled", f"Subsystem '{name}' is disabled in config")
+                result[name] = Unavailable(
+                    "disabled", f"Subsystem '{name}' is disabled in config"
+                )
                 continue
             try:
                 result[name] = self.tick_subsystem(name)
@@ -561,21 +584,23 @@ class BackendEngine:
 
     def list_scripts(self) -> list[ScriptInfo]:
         """Return metadata for all loaded scripts."""
-        
-        
 
         result: list[ScriptInfo] = []
         for script in self.loader.active_scripts:
             meta = script.METADATA or {}
-            script_type: str = "lua" if isinstance(script, LuaScriptWrapper) else "python"
-            result.append({
-                "name": str(meta.get("name", "?")),
-                "path": str(script.file_path) if script.file_path else "",
-                "type": script_type,
-                "execution_mode": script.execution_mode,  # type: ignore[reportAttributeAccessIssue]  # basedpyright false positive: BaseUserScript.execution_mode exists at runtime
-                "permissions": list(meta.get("permissions", [])),
-                "hooked_events": [],
-            })
+            script_type: str = (
+                "lua" if isinstance(script, LuaScriptWrapper) else "python"
+            )
+            result.append(
+                {
+                    "name": str(meta.get("name", "?")),
+                    "path": str(script.file_path) if script.file_path else "",
+                    "type": script_type,
+                    "execution_mode": script.execution_mode,  # type: ignore[reportAttributeAccessIssue]  # basedpyright false positive: BaseUserScript.execution_mode exists at runtime
+                    "permissions": list(meta.get("permissions", [])),
+                    "hooked_events": [],
+                }
+            )
         return result
 
     def get_script_source(self, name: str) -> str:
@@ -635,13 +660,13 @@ class BackendEngine:
 
     def get_script_status(self, name: str) -> ScriptStatus:
         """Return detailed status for a loaded script by name."""
-        
-        
 
         for script in self.loader.active_scripts:
             meta = script.METADATA or {}
             if meta.get("name") == name:
-                script_type: str = "lua" if isinstance(script, LuaScriptWrapper) else "python"
+                script_type: str = (
+                    "lua" if isinstance(script, LuaScriptWrapper) else "python"
+                )
 
                 hooked_events: list[str] = list(getattr(script, "hooks", []) or [])
                 if not hooked_events:
@@ -652,7 +677,9 @@ class BackendEngine:
                 line_count = 0
                 if script.file_path:
                     try:
-                        line_count = len(script.file_path.read_text(encoding="utf-8").splitlines())
+                        line_count = len(
+                            script.file_path.read_text(encoding="utf-8").splitlines()
+                        )
                     except Exception:
                         pass
 
@@ -681,12 +708,14 @@ class BackendEngine:
                 except Exception:
                     pass
 
-            result.append({
-                "name": str(candidate.meta.get("name", "?")),
-                "path": str(candidate.file_path),
-                "score": candidate.score,
-                "capabilities": capabilities,
-            })
+            result.append(
+                {
+                    "name": str(candidate.meta.get("name", "?")),
+                    "path": str(candidate.file_path),
+                    "score": candidate.score,
+                    "capabilities": capabilities,
+                }
+            )
         return result
 
     def get_driver_status(self, name: str) -> DriverStatus:
@@ -740,7 +769,7 @@ class BackendEngine:
                 self.loader.active_driver = candidate.cls()
 
                 for c in self.loader.all_candidates:
-                    c.loaded = (c is candidate)
+                    c.loaded = c is candidate
 
                 for script in self.loader.active_scripts:
                     if hasattr(script, "bind_driver"):
@@ -754,7 +783,9 @@ class BackendEngine:
         msg = f"Driver '{name}' not found"
         raise ValueError(msg)
 
-    def set_script_execution_mode(self, script_name: str, mode: ScriptExecutionMode) -> None:
+    def set_script_execution_mode(
+        self, script_name: str, mode: ScriptExecutionMode
+    ) -> None:
         """Change a script's execution mode by name."""
         for script in self.loader.active_scripts:
             meta = script.METADATA
@@ -764,7 +795,9 @@ class BackendEngine:
         msg = f"Script '{script_name}' not found"
         raise ValueError(msg)
 
-    def set_script_permissions(self, script_name: str, permissions: list[Permission]) -> None:
+    def set_script_permissions(
+        self, script_name: str, permissions: list[Permission]
+    ) -> None:
         """Update a script's allowed permissions by name."""
         for script in self.loader.active_scripts:
             meta = script.METADATA

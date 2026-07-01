@@ -59,9 +59,7 @@ class TestSnapshotToSystemMetrics:
         """TickSnapshot with known MetricsCollection values
         produces a SystemMetrics with correctly populated fields.
         """
-        cpu_metric = CPUMetric(
-            core_id=None, usage_percent=42.5, frequency_mhz=3500.0
-        )
+        cpu_metric = CPUMetric(core_id=None, usage_percent=42.5, frequency_mhz=3500.0)
         mem_metric = MemoryMetric(
             total_bytes=8_192_000,
             used_bytes=4_096_000,
@@ -69,35 +67,54 @@ class TestSnapshotToSystemMetrics:
             percent=50.0,
         )
         proc_a = ProcessMetric(
-            pid=1, name="init", cpu_percent=5.0,
-            memory_rss=1024, status="running",
+            pid=1,
+            name="init",
+            cpu_percent=5.0,
+            memory_rss=1024,
+            status="running",
         )
         proc_b = ProcessMetric(
-            pid=2, name="test_proc", cpu_percent=30.0,
-            memory_rss=2048, status="sleeping",
+            pid=2,
+            name="test_proc",
+            cpu_percent=30.0,
+            memory_rss=2048,
+            status="sleeping",
         )
         disk_metric = StorageMetric(
-            mount_point="/", total_bytes=500_000_000_000,
-            used_bytes=250_000_000_000, free_bytes=250_000_000_000,
+            mount_point="/",
+            total_bytes=500_000_000_000,
+            used_bytes=250_000_000_000,
+            free_bytes=250_000_000_000,
             percent=50.0,
         )
         net_metric = NetworkMetric(
-            bytes_sent=1000, bytes_recv=2000,
-            packets_sent=10, packets_recv=20,
+            bytes_sent=1000,
+            bytes_recv=2000,
+            packets_sent=10,
+            packets_recv=20,
         )
         gpu_metric = GPUMetric(
-            name="FakeGPU", usage_percent=30.0,
-            memory_total=1_073_741_824, memory_used=536_870_912,
+            name="FakeGPU",
+            usage_percent=30.0,
+            memory_total=1_073_741_824,
+            memory_used=536_870_912,
         )
         sensor_metric = SensorMetric(
-            name="cpu_package", value=65.0,
-            unit="celsius", category="temperature",
+            name="cpu_package",
+            value=65.0,
+            unit="celsius",
+            category="temperature",
         )
         bat_metric = BatteryMetric(
-            percent=85.0, power_plugged=True, seconds_left=None,
+            percent=85.0,
+            power_plugged=True,
+            seconds_left=None,
         )
         user_metric = UserMetric(
-            name="testuser", terminal="tty1", host=None, started=1000.0,
+            name="testuser",
+            terminal="tty1",
+            host=None,
+            started=1000.0,
         )
 
         snap = TickSnapshot(
@@ -185,8 +202,15 @@ class TestSnapshotToSystemMetrics:
         assert isinstance(result, SystemMetrics)
 
         for field_name in (
-            "cpu", "ram", "processes", "storage", "network",
-            "gpu", "sensors", "battery", "users",
+            "cpu",
+            "ram",
+            "processes",
+            "storage",
+            "network",
+            "gpu",
+            "sensors",
+            "battery",
+            "users",
         ):
             collection = getattr(result, field_name)
             assert collection is not None, (
@@ -208,18 +232,27 @@ class TestSnapshotToSystemMetrics:
             ),
             memory=Unavailable("unsupported", "no memory"),
             processes=MetricsCollection[ProcessMetric](
-                metrics=[ProcessMetric(
-                    pid=100, name="bash",
-                    cpu_percent=1.0, memory_rss=512, status="running",
-                )],
+                metrics=[
+                    ProcessMetric(
+                        pid=100,
+                        name="bash",
+                        cpu_percent=1.0,
+                        memory_rss=512,
+                        status="running",
+                    )
+                ],
             ),
             disk=Unavailable("unsupported", "no disk"),
             network=Unavailable("unsupported", "no network"),
             gpu=MetricsCollection[GPUMetric](
-                metrics=[GPUMetric(
-                    name="RTX", usage_percent=70.0,
-                    memory_total=8_000_000, memory_used=4_000_000,
-                )],
+                metrics=[
+                    GPUMetric(
+                        name="RTX",
+                        usage_percent=70.0,
+                        memory_total=8_000_000,
+                        memory_used=4_000_000,
+                    )
+                ],
             ),
             sensors=Unavailable("unsupported", "no sensors"),
             battery=Unavailable("unsupported", "no battery"),
@@ -285,8 +318,15 @@ class TestOnTickCallback:
 
         # Verify the snapshot has the expected top-level attributes
         for attr in (
-            "cpu", "memory", "processes", "disk", "network",
-            "gpu", "sensors", "battery", "users",
+            "cpu",
+            "memory",
+            "processes",
+            "disk",
+            "network",
+            "gpu",
+            "sensors",
+            "battery",
+            "users",
         ):
             assert hasattr(recorded, attr)
 

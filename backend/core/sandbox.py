@@ -183,7 +183,7 @@ class LuaScriptWrapper(BaseUserScript):
     def _parse_metadata(g: Any, file_path: Path) -> PluginMeta:
         try:
             lua_meta = g["METADATA"]
-        except (KeyError, TypeError):
+        except KeyError, TypeError:
             lua_meta = None
         if not lua_meta:
             return {
@@ -310,7 +310,9 @@ class LuaScriptWrapper(BaseUserScript):
     # Event dispatch
     # ------------------------------------------------------------------
 
-    def dispatch(self, event_path: str, data: Mapping[str, object] | None = None) -> None:
+    def dispatch(
+        self, event_path: str, data: Mapping[str, object] | None = None
+    ) -> None:
         """Dispatch a named event to the matching Lua callback.
 
         Wraps *data* in a Lua table with the same shape as ScriptContext,
@@ -324,12 +326,14 @@ class LuaScriptWrapper(BaseUserScript):
             return
         if self._is_asleep:
             return
-        lua_ctx = self.lua.table_from({
-            "data": self.lua.table_from(data),
-            "config": None,
-            "db": None,
-            "driver": None,
-        })
+        lua_ctx = self.lua.table_from(
+            {
+                "data": self.lua.table_from(data),
+                "config": None,
+                "db": None,
+                "driver": None,
+            }
+        )
         cb(lua_ctx)
 
     @property
@@ -359,7 +363,11 @@ class LuaScriptWrapper(BaseUserScript):
         proxy = DriverProxy(self._driver, perms, meta=self.METADATA)
         self.dispatch(
             "lifecycle.on_load",
-            {"config": getattr(ctx, "config", None), "db": getattr(ctx, "db", None), "driver": proxy},
+            {
+                "config": getattr(ctx, "config", None),
+                "db": getattr(ctx, "db", None),
+                "driver": proxy,
+            },
         )
 
     def trigger_unload(self, ctx: ScriptContext[None]) -> None:
@@ -369,5 +377,9 @@ class LuaScriptWrapper(BaseUserScript):
         proxy = DriverProxy(self._driver, perms, meta=self.METADATA)
         self.dispatch(
             "lifecycle.on_unload",
-            {"config": getattr(ctx, "config", None), "db": getattr(ctx, "db", None), "driver": proxy},
+            {
+                "config": getattr(ctx, "config", None),
+                "db": getattr(ctx, "db", None),
+                "driver": proxy,
+            },
         )

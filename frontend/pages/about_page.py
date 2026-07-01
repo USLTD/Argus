@@ -8,10 +8,11 @@ from PyQt6.QtCore import QT_VERSION_STR
 import platform
 import sys
 
+from frontend.core.engine_bridge import EngineBridge
+
 
 class AboutPage(QWidget):
-
-    def __init__(self, bridge=None):
+    def __init__(self, bridge: EngineBridge | None = None):
         super().__init__()
 
         layout = QVBoxLayout(self)
@@ -20,15 +21,9 @@ class AboutPage(QWidget):
         title = QLabel("<h1>ARGUS</h1>")
         layout.addWidget(title)
 
-        layout.addWidget(
-            QLabel("<b>Observe Everything</b>")
-        )
+        layout.addWidget(QLabel("<b>Observe Everything</b>"))
 
-        layout.addWidget(
-            QLabel(
-                "Cross-platform system monitor and process manager."
-            )
-        )
+        layout.addWidget(QLabel("Cross-platform system monitor and process manager."))
 
         layout.addWidget(QLabel(""))
 
@@ -62,16 +57,13 @@ class AboutPage(QWidget):
         layout.addWidget(QLabel(""))
 
         layout.addWidget(QLabel("<b>Architecture</b>"))
-        layout.addWidget(QLabel(
-            "Driver-based backend • EngineBridge • "
-            "PyQt6 GUI • Textual TUI"
-        ))
+        layout.addWidget(
+            QLabel("Driver-based backend • EngineBridge • PyQt6 GUI • Textual TUI")
+        )
 
         layout.addWidget(QLabel(""))
 
         layout.addWidget(QLabel("<b>GitHub</b>"))
-        layout.addWidget(
-            QLabel("https://github.com/<your-repository>")
-        )
+        layout.addWidget(QLabel("https://github.com/<your-repository>"))
 
         layout.addStretch()

@@ -6,7 +6,6 @@ from frontend.core.engine_bridge import EngineBridge
 
 
 class CPUPage(QWidget):
-
     def __init__(self, bridge: EngineBridge | None = None) -> None:
 
         super().__init__()
@@ -17,32 +16,19 @@ class CPUPage(QWidget):
 
         self.main_graph = CPUGraph(bridge=self._bridge)
 
-        layout.addWidget(
-            self.main_graph,
-            0,
-            0,
-            1,
-            4
-        )
+        layout.addWidget(self.main_graph, 0, 0, 1, 4)
 
         self.core_graphs = []
 
         core_count = 8
 
         for i in range(core_count):
-
             graph = CPUGraph(bridge=self._bridge)
 
-            self.core_graphs.append(
-                graph
-            )
+            self.core_graphs.append(graph)
 
             row = 1 + (i // 4)
 
             col = i % 4
 
-            layout.addWidget(
-                graph,
-                row,
-                col
-            )
+            layout.addWidget(graph, row, col)

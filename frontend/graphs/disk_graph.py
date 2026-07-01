@@ -5,7 +5,6 @@ from frontend.core.engine_bridge import EngineBridge
 
 
 class DiskGraph(BaseGraph):
-
     def __init__(self, drive: str, bridge: EngineBridge | None = None) -> None:
 
         self.drive = drive
@@ -26,9 +25,7 @@ class DiskGraph(BaseGraph):
     def refresh(self):
 
         try:
-            percent = self._bridge.get_disk_usage(
-                self.drive
-            )["percent"]
+            percent = self._bridge.get_disk_usage(self.drive)["percent"]
 
             self.update_value(percent)
 

@@ -59,9 +59,21 @@ class SyncBridge:
         self.tick_all()
         snap = self._snapshot
         if snap is None:
-            return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
+            return {
+                "cpu_percent": 0.0,
+                "per_core": [],
+                "frequency": None,
+                "physical_cores": 0,
+                "logical_cores": 0,
+            }
         if isinstance(snap.cpu, Unavailable):
-            return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
+            return {
+                "cpu_percent": 0.0,
+                "per_core": [],
+                "frequency": None,
+                "physical_cores": 0,
+                "logical_cores": 0,
+            }
         static = self._driver.get_static_info()
         if static is not None:
             raw_cores = static.cpu.physical_cores
@@ -81,9 +93,23 @@ class SyncBridge:
         self.tick_all()
         snap = self._snapshot
         if snap is None:
-            return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+            return {
+                "total": 0,
+                "used": 0,
+                "available": 0,
+                "free": 0,
+                "cached": 0,
+                "percent": 0.0,
+            }
         if isinstance(snap.memory, Unavailable):
-            return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+            return {
+                "total": 0,
+                "used": 0,
+                "available": 0,
+                "free": 0,
+                "cached": 0,
+                "percent": 0.0,
+            }
         return memory_collection_to_dict(snap.memory)
 
     def get_disk_usage(self, path: str = "/") -> dict:

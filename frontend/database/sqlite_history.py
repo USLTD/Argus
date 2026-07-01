@@ -3,15 +3,11 @@ from datetime import datetime
 
 
 class SQLiteHistory:
-
     def __init__(self, path="argus_history.db"):
 
-        self.connection = sqlite3.connect(
-            path
-        )
+        self.connection = sqlite3.connect(path)
 
         self.create_table()
-
 
     def create_table(self):
 
@@ -34,7 +30,6 @@ class SQLiteHistory:
         )
 
         self.connection.commit()
-
 
     def insert(self, snapshot):
 
@@ -60,7 +55,7 @@ class SQLiteHistory:
                 snapshot["disk"],
                 snapshot["network_sent"],
                 snapshot["network_recv"],
-            )
+            ),
         )
 
         self.connection.commit()
@@ -74,7 +69,7 @@ class SQLiteHistory:
             ORDER BY timestamp DESC
             LIMIT 1
             """,
-            (timestamp,)
+            (timestamp,),
         )
 
         row = cursor.fetchone()
@@ -83,16 +78,10 @@ class SQLiteHistory:
             return None
 
         return {
-
             "timestamp": row[1],
-
             "cpu": row[2],
-
             "memory": row[3],
-
             "disk": row[4],
-
             "network_sent": row[5],
-
-            "network_recv": row[6]
+            "network_recv": row[6],
         }

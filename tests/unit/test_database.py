@@ -33,7 +33,11 @@ class TestDatabaseManager:
         )
         ram = MemoryMetrics(
             metadata=MetricMetadata(collected_at=time.time()),
-            metrics=[MemoryMetric(total_bytes=1000, used_bytes=500, available_bytes=500, percent=50.0)],
+            metrics=[
+                MemoryMetric(
+                    total_bytes=1000, used_bytes=500, available_bytes=500, percent=50.0
+                )
+            ],
         )
         metrics = SystemMetrics(cpu=cpu, ram=ram)
         db.write_snapshot(metrics)

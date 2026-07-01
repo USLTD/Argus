@@ -4,7 +4,6 @@ from PyQt6.QtCore import QSize
 
 
 class Sidebar(QListWidget):
-
     PAGES = [
         ("Overview", "frontend/assets/icons/Overview.png"),
         ("Processes", "frontend/assets/icons/Processes.png"),
@@ -18,7 +17,6 @@ class Sidebar(QListWidget):
         ("Information", "frontend/assets/icons/Information.png"),
     ]
 
-
     def __init__(self):
 
         super().__init__()
@@ -30,9 +28,7 @@ class Sidebar(QListWidget):
 
         self._page_items: list[QListWidgetItem] = []
 
-
         for name, icon_path in self.PAGES:
-
             item = QListWidgetItem()
 
             item.setText(name)
@@ -45,8 +41,6 @@ class Sidebar(QListWidget):
 
             self._page_items.append(item)
 
-
-
     def toggle_sidebar(self):
 
         if self.expanded:
@@ -54,8 +48,6 @@ class Sidebar(QListWidget):
 
         else:
             self.expand()
-
-
 
     def collapse(self):
 
@@ -65,8 +57,6 @@ class Sidebar(QListWidget):
             item.setText("")
 
         self.expanded = False
-
-
 
     def expand(self):
 

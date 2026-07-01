@@ -42,14 +42,18 @@ class FakeDriver(BaseDriver):
         )
 
     @override
-    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric] | Unavailable:
+    def tick_cpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[CPUMetric] | Unavailable:
         return MetricsCollection[CPUMetric](
             metadata=MetricMetadata(),
             metrics=[CPUMetric(usage_percent=42.5, core_id=None)],
         )
 
     @override
-    def tick_memory(self, ctx: DriverContext) -> MetricsCollection[MemoryMetric] | Unavailable:
+    def tick_memory(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[MemoryMetric] | Unavailable:
         return MetricsCollection[MemoryMetric](
             metadata=MetricMetadata(),
             metrics=[
@@ -63,53 +67,75 @@ class FakeDriver(BaseDriver):
         )
 
     @override
-    def tick_processes(self, ctx: DriverContext) -> MetricsCollection[ProcessMetric] | Unavailable:
+    def tick_processes(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[ProcessMetric] | Unavailable:
         return MetricsCollection[ProcessMetric](
             metadata=MetricMetadata(),
             metrics=[
                 ProcessMetric(
-                    pid=1, name="init", cpu_percent=5.0,
-                    memory_rss=1024, status="running",
+                    pid=1,
+                    name="init",
+                    cpu_percent=5.0,
+                    memory_rss=1024,
+                    status="running",
                 ),
                 ProcessMetric(
-                    pid=2, name="test_proc", cpu_percent=30.0,
-                    memory_rss=2048, status="sleeping",
+                    pid=2,
+                    name="test_proc",
+                    cpu_percent=30.0,
+                    memory_rss=2048,
+                    status="sleeping",
                 ),
             ],
         )
 
     @override
-    def tick_gpu(self, ctx: DriverContext) -> MetricsCollection[GPUMetric] | Unavailable:
+    def tick_gpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[GPUMetric] | Unavailable:
         return MetricsCollection[GPUMetric](
             metadata=MetricMetadata(),
             metrics=[
                 GPUMetric(
-                    name="FakeGPU", usage_percent=30.0,
-                    memory_total=1073741824, memory_used=536870912,
+                    name="FakeGPU",
+                    usage_percent=30.0,
+                    memory_total=1073741824,
+                    memory_used=536870912,
                 )
             ],
         )
 
     @override
-    def tick_sensors(self, ctx: DriverContext) -> MetricsCollection[SensorMetric] | Unavailable:
+    def tick_sensors(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[SensorMetric] | Unavailable:
         return MetricsCollection[SensorMetric](
             metadata=MetricMetadata(),
             metrics=[SensorMetric(name="cpu_package", value=65.0)],
         )
 
     @override
-    def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
+    def tick_battery(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[BatteryMetric] | Unavailable:
         return MetricsCollection[BatteryMetric](
             metadata=MetricMetadata(),
-            metrics=[BatteryMetric(percent=85.0, power_plugged=True, seconds_left=None)],
+            metrics=[
+                BatteryMetric(percent=85.0, power_plugged=True, seconds_left=None)
+            ],
         )
 
     @override
-    def tick_disk(self, ctx: DriverContext) -> MetricsCollection[StorageMetric] | Unavailable:
+    def tick_disk(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[StorageMetric] | Unavailable:
         return Unavailable("unsupported", "Storage not available in test driver")
 
     @override
-    def tick_network(self, ctx: DriverContext) -> MetricsCollection[NetworkMetric] | Unavailable:
+    def tick_network(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[NetworkMetric] | Unavailable:
         return Unavailable("unsupported", "Network not available in test driver")
 
     @override

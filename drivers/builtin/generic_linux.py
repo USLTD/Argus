@@ -60,6 +60,7 @@ METADATA: PluginMeta = {
     ],
 }
 
+
 class LinuxDriver(BaseDriver):
     @override
     def get_capabilities(self) -> SystemCapabilities:
@@ -77,11 +78,15 @@ class LinuxDriver(BaseDriver):
             network=NetworkCapabilities(present=True, bandwidth=True),
             sensors=SensorCapabilities(present=True),
             battery=BatteryCapabilities(present=True),
-            driver=DriverInfo(name="Generic Linux Driver", version="1.0", platform="linux"),
+            driver=DriverInfo(
+                name="Generic Linux Driver", version="1.0", platform="linux"
+            ),
         )
 
     @override
-    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric] | Unavailable:
+    def tick_cpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[CPUMetric] | Unavailable:
         try:
             freq = psutil.cpu_freq()
             aggregate = CPUMetric(
@@ -101,7 +106,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_memory(self, ctx: DriverContext) -> MetricsCollection[MemoryMetric] | Unavailable:
+    def tick_memory(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[MemoryMetric] | Unavailable:
         try:
             mem = psutil.virtual_memory()
             return MetricsCollection[MemoryMetric](
@@ -119,7 +126,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_processes(self, ctx: DriverContext) -> MetricsCollection[ProcessMetric] | Unavailable:
+    def tick_processes(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[ProcessMetric] | Unavailable:
         try:
             processes: list[ProcessMetric] = []
             for proc in psutil.process_iter(
@@ -138,7 +147,7 @@ class LinuxDriver(BaseDriver):
                             username=pinfo.get("username"),
                         )
                     )
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                except psutil.NoSuchProcess, psutil.AccessDenied:
                     continue
             return MetricsCollection[ProcessMetric](
                 metadata=MetricMetadata(collected_at=time.time()),
@@ -148,7 +157,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_disk(self, ctx: DriverContext) -> MetricsCollection[StorageMetric] | Unavailable:
+    def tick_disk(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[StorageMetric] | Unavailable:
         try:
             storage: list[StorageMetric] = []
             for part in psutil.disk_partitions():
@@ -173,7 +184,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_network(self, ctx: DriverContext) -> MetricsCollection[NetworkMetric] | Unavailable:
+    def tick_network(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[NetworkMetric] | Unavailable:
         try:
             net_io = psutil.net_io_counters()
             return MetricsCollection[NetworkMetric](
@@ -191,7 +204,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_gpu(self, ctx: DriverContext) -> MetricsCollection[GPUMetric] | Unavailable:
+    def tick_gpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[GPUMetric] | Unavailable:
         if GPUtil is None:
             return Unavailable("unsupported", "GPUtil not installed")
         try:
@@ -213,7 +228,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_sensors(self, ctx: DriverContext) -> MetricsCollection[SensorMetric] | Unavailable:
+    def tick_sensors(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[SensorMetric] | Unavailable:
         try:
             sensors: list[SensorMetric] = []
             for name, entries in psutil.sensors_temperatures().items():
@@ -233,7 +250,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
+    def tick_battery(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[BatteryMetric] | Unavailable:
         try:
             sb = psutil.sensors_battery()
             if sb is None:
@@ -252,7 +271,9 @@ class LinuxDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def tick_users(self, ctx: DriverContext) -> MetricsCollection[UserMetric] | Unavailable:  # type: ignore[reportGeneralTypeIssues]  # basedpyright false positive: method exists on BaseDriver at runtime
+    def tick_users(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[UserMetric] | Unavailable:  # type: ignore[reportGeneralTypeIssues]  # basedpyright false positive: method exists on BaseDriver at runtime
         try:
             users = psutil.users()
             return MetricsCollection[UserMetric](
@@ -360,18 +381,35 @@ class LinuxDriver(BaseDriver):
                 frequency_mhz=cpu_freq_mhz,
             ),
             gpu=GpuInfo(
-                name=gpu_info.get("name") if "name" in gpu_info else UnavailableInfo(reason="unsupported"),
-                driver=UnavailableInfo(reason="unsupported"),  # Linux GPUtil doesn't expose driver version
-                vram_bytes=gpu_info.get("vram_bytes") if "vram_bytes" in gpu_info else UnavailableInfo(reason="unsupported"),
+                name=gpu_info.get("name")
+                if "name" in gpu_info
+                else UnavailableInfo(reason="unsupported"),
+                driver=UnavailableInfo(
+                    reason="unsupported"
+                ),  # Linux GPUtil doesn't expose driver version
+                vram_bytes=gpu_info.get("vram_bytes")
+                if "vram_bytes" in gpu_info
+                else UnavailableInfo(reason="unsupported"),
             ),
             motherboard=MotherboardInfo(
-                manufacturer=mobo_info.get("manufacturer") if "manufacturer" in mobo_info else UnavailableInfo(reason="unsupported"),
-                model=mobo_info.get("model") if "model" in mobo_info else UnavailableInfo(reason="unsupported"),
-                bios_version=mobo_info.get("bios_version") if "bios_version" in mobo_info else UnavailableInfo(reason="unsupported"),
+                manufacturer=mobo_info.get("manufacturer")
+                if "manufacturer" in mobo_info
+                else UnavailableInfo(reason="unsupported"),
+                model=mobo_info.get("model")
+                if "model" in mobo_info
+                else UnavailableInfo(reason="unsupported"),
+                bios_version=mobo_info.get("bios_version")
+                if "bios_version" in mobo_info
+                else UnavailableInfo(reason="unsupported"),
             ),
             os=OsInfo(name=os_name, version=os_version, architecture=arch),
             memory=MemoryInfo(total_ram_bytes=total_ram),
-            system=SystemInfo(hostname=hostname, username=username, python_version=py_ver, boot_time=boot_time),
+            system=SystemInfo(
+                hostname=hostname,
+                username=username,
+                python_version=py_ver,
+                boot_time=boot_time,
+            ),
             network=NetworkInfo(interfaces=network_interfaces),
         )
 
@@ -382,7 +420,7 @@ class LinuxDriver(BaseDriver):
                 proc = psutil.Process(pid)
                 proc.kill()
                 return True
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except psutil.NoSuchProcess, psutil.AccessDenied:
                 return False
         return False
 

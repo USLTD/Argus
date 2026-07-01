@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import QVBoxLayout
 
 
 class BaseGraph(QWidget):
-
     def __init__(self, title):
 
         super().__init__()
@@ -37,19 +36,13 @@ class BaseGraph(QWidget):
         self.graph.getAxis("bottom").setTextPen("black")
 
         # Light blue pen (main ARGUS style)
-        self.pen = pg.mkPen(
-            color=(120, 180, 255),
-            width=2
-        )
+        self.pen = pg.mkPen(color=(120, 180, 255), width=2)
 
         # Optional subtle fill under graph (XP-like feel)
         self.brush = pg.mkBrush(120, 180, 255, 40)
 
         self.curve = self.graph.plot(
-            self.history,
-            pen=self.pen,
-            fillLevel=0,
-            brush=self.brush
+            self.history, pen=self.pen, fillLevel=0, brush=self.brush
         )
 
     def update_value(self, value):

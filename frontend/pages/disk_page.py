@@ -1,10 +1,4 @@
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QProgressBar,
-    QFrame
-)
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar, QFrame
 
 from frontend.graphs.base_graph import BaseGraph
 
@@ -13,7 +7,6 @@ from frontend.core.engine_bridge import EngineBridge
 
 
 class DiskCard(QFrame):
-
     def __init__(self, drive: str, bridge: EngineBridge | None = None) -> None:
         super().__init__()
 
@@ -75,29 +68,20 @@ class DiskCard(QFrame):
         try:
             usage = self._bridge.get_disk_usage(self.drive)
 
-            total_gb = usage["total"] / (1024 ** 3)
-            used_gb = usage["used"] / (1024 ** 3)
+            total_gb = usage["total"] / (1024**3)
+            used_gb = usage["used"] / (1024**3)
 
-            self.space_label.setText(
-                f"{used_gb:.0f} GB / {total_gb:.0f} GB"
-            )
+            self.space_label.setText(f"{used_gb:.0f} GB / {total_gb:.0f} GB")
 
-            self.progress_bar.setValue(
-                int(usage["percent"])
-            )
+            self.progress_bar.setValue(int(usage["percent"]))
 
-            self.graph.update_value(
-                usage["percent"]
-            )
+            self.graph.update_value(usage["percent"])
 
         except Exception:
-            self.space_label.setText(
-                "Drive not available"
-            )
+            self.space_label.setText("Drive not available")
 
 
 class DiskPage(QWidget):
-
     def __init__(self, bridge: EngineBridge | None = None) -> None:
         super().__init__()
 

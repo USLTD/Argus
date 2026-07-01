@@ -6,18 +6,15 @@ from PyQt6.QtWidgets import (
     QWidget,
     QSlider,
     QTableWidgetItem,
-    QComboBox
+    QComboBox,
 )
 
-from PyQt6.QtCore import (
-    Qt,
-    QTimer
-)
+from PyQt6.QtCore import Qt, QTimer
 
 from datetime import datetime, timedelta
 
+from frontend.core.engine_bridge import EngineBridge
 from frontend.pages.overview_page import OverviewPage
-
 
 
 class RecordingPage(OverviewPage):
@@ -36,33 +33,22 @@ class RecordingPage(OverviewPage):
     Loads previous states from database.
     """
 
+    def __init__(self, bridge: EngineBridge | None = None):
 
-    def __init__(self, bridge):
-
-        super().__init__(
-            bridge
-        )
-
+        super().__init__(bridge)
 
         self.bridge = bridge
 
-
         self.current_time = datetime.now()
-
 
         self.playing = False
 
-
         self.timer = QTimer()
 
-        self.timer.timeout.connect(
-            self.go_forward
-        )
+        self.timer.timeout.connect(self.go_forward)
 
         self.interval = 1000
         self.create_controls()
-
-
 
     # -------------------------------------------------
     # Controls
@@ -96,14 +82,7 @@ class RecordingPage(OverviewPage):
         self.forward300 = QPushButton("5m▶")
 
         self.speed = QComboBox()
-        self.speed.addItems([
-            "0.25x",
-            "0.5x",
-            "1x",
-            "2x",
-            "5x",
-            "10x"
-        ])
+        self.speed.addItems(["0.25x", "0.5x", "1x", "2x", "5x", "10x"])
         self.speed.setCurrentText("1x")
 
         self.time_label = QLabel()
@@ -118,7 +97,7 @@ class RecordingPage(OverviewPage):
             self.forward1,
             self.forward10,
             self.forward60,
-            self.forward300
+            self.forward300,
         ]
 
         for button in buttons:
@@ -150,17 +129,13 @@ class RecordingPage(OverviewPage):
 
         root.addLayout(controls)
 
-
         container = QWidget()
         container.setLayout(root)
 
-        self.layout().addWidget(
-            container,
-            3,
-            0,
-            1,
-            3
-        )
+        layout = self.layout()
+
+        if layout:
+            layout.addWidget(container)
         # Signals
 
         self.back1.clicked.connect(lambda: self.jump_seconds(-1))
@@ -176,17 +151,11 @@ class RecordingPage(OverviewPage):
         self.play_button.clicked.connect(self.toggle_play)
         self.live_button.clicked.connect(self.go_live)
 
-        self.speed.currentTextChanged.connect(
-            self.change_speed
-        )
+        self.speed.currentTextChanged.connect(self.change_speed)
 
-        self.timeline.valueChanged.connect(
-            self.timeline_changed
-        )
+        self.timeline.valueChanged.connect(self.timeline_changed)
 
         self.update_time_label()
-
-
 
     # -------------------------------------------------
     # Database loading
@@ -194,139 +163,105 @@ class RecordingPage(OverviewPage):
 
     def load_time(self):
 
-
-        snapshot = self.bridge.get_history_snapshot(
-            self.current_time.isoformat()
-        )
-
-
-        print(
-            "TIME MACHINE:",
-            self.current_time,
-            snapshot
-        )
-
-
-        if snapshot is None:
-
+        if self.bridge is None:
             return
 
+        try:
+            snapshot = self.bridge.get_history_snapshot(self.current_time.isoformat())
+        except Exception as e:
+            print(f"TM load_time error: {e}")
+            return
 
-        self.update_from_snapshot(
-            snapshot
-        )
+        print("TIME MACHINE:", self.current_time, snapshot)
 
+        if snapshot is None:
+            return
+
+        self.update_from_snapshot(snapshot)
 
         self.update_time_label()
-
-
 
     # -------------------------------------------------
     # Update widgets
     # -------------------------------------------------
 
-    def update_from_snapshot(
-            self,
-            data
-    ):
+    def update_from_snapshot(self, data):
 
-
+        # --- CPU ---
         if "cpu" in data:
-
+            cpu_val = (
+                data["cpu"]
+                if isinstance(data["cpu"], (int, float))
+                else data["cpu"].get("cpu_percent", 0)
+            )
             try:
+                self.cpu.update_value(cpu_val)
+            except Exception as e:
+                print(f"TM cpu update error: {e}")
 
-                self.cpu.update_data(
-                    data["cpu"]
-                )
-
-            except Exception:
-
-                pass
-
-
-
+        # --- Memory ---
         if "memory" in data:
+            mem_val = (
+                data["memory"]
+                if isinstance(data["memory"], (int, float))
+                else data["memory"].get("percent", 0)
+            )
+            print(f"TM memory: {mem_val}%")
 
-            try:
+        # --- Disk ---
+        if "disk" in data:
+            disk_val = (
+                data["disk"]
+                if isinstance(data["disk"], (int, float))
+                else data["disk"].get("percent", 0)
+            )
+            print(f"TM disk: {disk_val}%")
+        elif (
+            "disks" in data
+            and isinstance(data.get("disks"), list)
+            and len(data["disks"]) > 0
+        ):
+            disk_val = data["disks"][0].get("percent", 0)
+            print(f"TM disk: {disk_val}%")
 
-                self.memory_bar.update_data(
-                    data["memory"]
-                )
-
-            except Exception:
-
-                pass
-
-
-
+        # --- Network ---
         if "network" in data:
-
-            try:
-
-                self.network_widget.update_data(
-                    data["network"]
+            net = data["network"]
+            if isinstance(net, dict):
+                print(
+                    f"TM network: sent={net.get('bytes_sent', 0)}, recv={net.get('bytes_recv', 0)}"
                 )
-
-            except Exception:
-
-                pass
-
-
-
-        if "processes" in data:
-
-            self.update_process_table_history(
-                data["processes"]
+            else:
+                print(f"TM network: {net}")
+        elif "network_sent" in data or "network_recv" in data:
+            print(
+                f"TM network: sent={data.get('network_sent', 0)}, recv={data.get('network_recv', 0)}"
             )
 
-
+        # --- Processes ---
+        if "processes" in data and isinstance(data["processes"], list):
+            self.update_process_table_history(data["processes"])
 
     # -------------------------------------------------
     # Processes
     # -------------------------------------------------
 
-    def update_process_table_history(
-            self,
-            processes
-    ):
+    def update_process_table_history(self, processes):
 
-
-        self.table.setRowCount(
-            len(processes)
-        )
-
+        self.table.setRowCount(len(processes))
 
         for row, proc in enumerate(processes):
-
-
             values = [
-
                 proc.get("pid", ""),
-
                 proc.get("name", ""),
-
                 proc.get("cpu_percent", ""),
-
                 proc.get("memory_info", ""),
-
                 proc.get("status", ""),
-
-                proc.get("num_threads", "")
-
+                proc.get("num_threads", ""),
             ]
 
-
             for col, value in enumerate(values):
-
-                self.table.setItem(
-                    row,
-                    col,
-                    QTableWidgetItem(
-                        str(value)
-                    )
-                )
-
-
+                self.table.setItem(row, col, QTableWidgetItem(str(value)))
 
     # -------------------------------------------------
     # Timeline movement
@@ -334,44 +269,22 @@ class RecordingPage(OverviewPage):
 
     def go_back(self):
 
-        self.current_time -= timedelta(
-            seconds=1
-        )
+        self.current_time -= timedelta(seconds=1)
 
-
-        self.timeline.setValue(
-            self.timeline.value() - 1
-        )
-
+        self.timeline.setValue(self.timeline.value() - 1)
 
         self.load_time()
-
-
 
     def go_forward(self):
 
-        self.current_time += timedelta(
-            seconds=1
-        )
-
+        self.current_time += timedelta(seconds=1)
 
         if self.current_time >= datetime.now():
-
             self.current_time = datetime.now()
 
-
-
-        self.timeline.setValue(
-            min(
-                0,
-                self.timeline.value() + 1
-            )
-        )
-
+        self.timeline.setValue(min(0, self.timeline.value() + 1))
 
         self.load_time()
-
-
 
     # -------------------------------------------------
     # Playback
@@ -381,31 +294,15 @@ class RecordingPage(OverviewPage):
 
         self.playing = not self.playing
 
-
         if self.playing:
+            self.play_button.setText("⏸ Pause")
 
-
-            self.play_button.setText(
-                "⏸ Pause"
-            )
-
-
-            self.timer.start(
-                self.interval
-            )
-
+            self.timer.start(self.interval)
 
         else:
-
-
-            self.play_button.setText(
-                "▶ Play"
-            )
-
+            self.play_button.setText("▶ Play")
 
             self.timer.stop()
-
-
 
     # -------------------------------------------------
     # Live mode
@@ -415,42 +312,19 @@ class RecordingPage(OverviewPage):
 
         self.current_time = datetime.now()
 
-
-        self.timeline.setValue(
-            0
-        )
-
+        self.timeline.setValue(0)
 
         self.load_time()
-
-
 
     # -------------------------------------------------
     # Slider
     # -------------------------------------------------
 
-    def timeline_changed(
-            self,
-            value
-    ):
+    def timeline_changed(self, value):
 
-
-        self.current_time = (
-
-            datetime.now()
-
-            +
-
-            timedelta(
-                seconds=value
-            )
-
-        )
-
+        self.current_time = datetime.now() + timedelta(seconds=value)
 
         self.load_time()
-
-
 
     # -------------------------------------------------
     # Label
@@ -458,13 +332,7 @@ class RecordingPage(OverviewPage):
 
     def update_time_label(self):
 
-        self.time_label.setText(
-
-            self.current_time.strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-
-        )
+        self.time_label.setText(self.current_time.strftime("%Y-%m-%d %H:%M:%S"))
 
     def jump_seconds(self, seconds):
 
@@ -483,12 +351,10 @@ class RecordingPage(OverviewPage):
             "1x": 1000,
             "2x": 500,
             "5x": 200,
-            "10x": 100
+            "10x": 100,
         }
 
         self.interval = mapping[text]
 
         if self.playing:
-            self.timer.start(
-                self.interval
-            )
+            self.timer.start(self.interval)

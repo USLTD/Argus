@@ -71,7 +71,6 @@ from .caps import (
 from backend.interfaces.sentinels import TickSnapshot, Unavailable
 from .enums import ConfidenceScore, Permission
 
-
 class PluginMeta(TypedDict, total=True):
     """Required metadata for every plugin module.
 
@@ -99,13 +98,14 @@ class PluginMeta(TypedDict, total=True):
     permissions: NotRequired[list[Permission]]
     """List of :class:`Permission` values the plugin requires."""
 
-    compatible: NotRequired[list[str] | Callable[[SystemCapabilities], ConfidenceScore | None]]
+    compatible: NotRequired[
+        list[str] | Callable[[SystemCapabilities], ConfidenceScore | None]
+    ]
     """Optional compatibility rules.
 
     * Declarative: ``["sys.platform EQ 'win32' -> FULL"]``
     * Callable (drivers only): ``Callable[[SystemCapabilities], ConfidenceScore | None]``
     """
-
 
 @dataclass
 class PluginContext:
@@ -120,10 +120,8 @@ class PluginContext:
     driver: BaseDriver | None = None
     """Active hardware driver instance (or ``None``)."""
 
-
 class BasePlugin(ABC):
     """Root interface for all extensions."""
-
 
 class BaseDriver(BasePlugin, ABC):
     """Extend this class to implement a hardware driver.
@@ -136,7 +134,6 @@ class BaseDriver(BasePlugin, ABC):
     _initialized: bool
 
     def __init__(self) -> None: ...
-
     def on_load(self, ctx: DriverContext | None = None) -> None:
         """Called after driver instantiation. Default: no-op."""
 
@@ -147,45 +144,61 @@ class BaseDriver(BasePlugin, ABC):
         """INTERNAL: calls on_unload(). Driver devs should not override."""
 
     def __enter__(self) -> BaseDriver: ...
-
     def __exit__(self, *args: object) -> None: ...
-
     def tick(self, ctx: DriverContext) -> TickSnapshot:
         """Called each engine tick. Aggregate subsystem data into TickSnapshot."""
 
     @abstractmethod
-    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric] | Unavailable:
+    def tick_cpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[CPUMetric] | Unavailable:
         """CPU usage, core counts."""
 
     @abstractmethod
-    def tick_memory(self, ctx: DriverContext) -> MetricsCollection[MemoryMetric] | Unavailable:
+    def tick_memory(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[MemoryMetric] | Unavailable:
         """RAM total, used, available, percent."""
 
     @abstractmethod
-    def tick_processes(self, ctx: DriverContext) -> MetricsCollection[ProcessMetric] | Unavailable:
+    def tick_processes(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[ProcessMetric] | Unavailable:
         """Snapshot of running processes."""
 
     @abstractmethod
-    def tick_disk(self, ctx: DriverContext) -> MetricsCollection[StorageMetric] | Unavailable:
+    def tick_disk(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[StorageMetric] | Unavailable:
         """Per-mount-point disk usage."""
 
     @abstractmethod
-    def tick_network(self, ctx: DriverContext) -> MetricsCollection[NetworkMetric] | Unavailable:
+    def tick_network(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[NetworkMetric] | Unavailable:
         """Per-interface network I/O counters."""
 
     @abstractmethod
-    def tick_gpu(self, ctx: DriverContext) -> MetricsCollection[GPUMetric] | Unavailable:
+    def tick_gpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[GPUMetric] | Unavailable:
         """Per-GPU metrics."""
 
     @abstractmethod
-    def tick_sensors(self, ctx: DriverContext) -> MetricsCollection[SensorMetric] | Unavailable:
+    def tick_sensors(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[SensorMetric] | Unavailable:
         """Temperature/voltage/fan sensors."""
 
     @abstractmethod
-    def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
+    def tick_battery(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[BatteryMetric] | Unavailable:
         """Battery charge, status."""
 
-    def tick_users(self, ctx: DriverContext) -> MetricsCollection[UserMetric] | Unavailable:
+    def tick_users(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[UserMetric] | Unavailable:
         """Logged-in users. Override to implement."""
 
     def get_static_info(self) -> StaticSystemInfo | None:
@@ -204,7 +217,6 @@ class BaseDriver(BasePlugin, ABC):
 
         Actions: ``"kill"``.
         """
-
 
 class BaseUserScript:
     """Base class for user scripts (Lua, Python). Default methods are no-ops.

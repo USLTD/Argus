@@ -2,7 +2,6 @@ from PyQt6.QtWidgets import QMenuBar
 
 
 class ArgusMenuBar(QMenuBar):
-
     def __init__(self):
 
         super().__init__()

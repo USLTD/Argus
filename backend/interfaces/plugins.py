@@ -35,7 +35,9 @@ class PluginMeta(TypedDict, total=True):
     author: str
     version: str
     permissions: NotRequired[list[Permission]]
-    compatible: NotRequired[list[str] | Callable[[SystemCapabilities], ConfidenceScore | None]]
+    compatible: NotRequired[
+        list[str] | Callable[[SystemCapabilities], ConfidenceScore | None]
+    ]
 
 
 @dataclass
@@ -83,39 +85,57 @@ class BaseDriver(BasePlugin, ABC):
 
     # ── Per-subsystem tick methods ──────────────────────────────
 
-    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric] | Unavailable:
+    def tick_cpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[CPUMetric] | Unavailable:
         """CPU usage, core counts. Override to implement."""
         return Unavailable("unsupported", "CPU monitoring not implemented")
 
-    def tick_memory(self, ctx: DriverContext) -> MetricsCollection[MemoryMetric] | Unavailable:
+    def tick_memory(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[MemoryMetric] | Unavailable:
         """RAM total, used, available, percent. Override to implement."""
         return Unavailable("unsupported", "Memory monitoring not implemented")
 
-    def tick_disk(self, ctx: DriverContext) -> MetricsCollection[StorageMetric] | Unavailable:
+    def tick_disk(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[StorageMetric] | Unavailable:
         """Per-mount-point disk usage. Override to implement."""
         return Unavailable("unsupported", "Disk monitoring not implemented")
 
-    def tick_network(self, ctx: DriverContext) -> MetricsCollection[NetworkMetric] | Unavailable:
+    def tick_network(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[NetworkMetric] | Unavailable:
         """Per-interface network I/O counters. Override to implement."""
         return Unavailable("unsupported", "Network monitoring not implemented")
 
-    def tick_processes(self, ctx: DriverContext) -> MetricsCollection[ProcessMetric] | Unavailable:
+    def tick_processes(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[ProcessMetric] | Unavailable:
         """Snapshot of running processes. Override to implement."""
         return Unavailable("unsupported", "Process listing not implemented")
 
-    def tick_gpu(self, ctx: DriverContext) -> MetricsCollection[GPUMetric] | Unavailable:
+    def tick_gpu(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[GPUMetric] | Unavailable:
         """Per-GPU metrics. Override to implement."""
         return Unavailable("unsupported", "GPU monitoring not implemented")
 
-    def tick_sensors(self, ctx: DriverContext) -> MetricsCollection[SensorMetric] | Unavailable:
+    def tick_sensors(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[SensorMetric] | Unavailable:
         """Temperature/voltage/fan sensors. Override to implement."""
         return Unavailable("unsupported", "Sensor monitoring not implemented")
 
-    def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
+    def tick_battery(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[BatteryMetric] | Unavailable:
         """Battery charge, status. Override to implement."""
         return Unavailable("unsupported", "Battery monitoring not implemented")
 
-    def tick_users(self, ctx: DriverContext) -> MetricsCollection[UserMetric] | Unavailable:
+    def tick_users(
+        self, ctx: DriverContext
+    ) -> MetricsCollection[UserMetric] | Unavailable:
         """Logged-in users. Override to implement."""
         return Unavailable("unsupported", "User monitoring not implemented")
 

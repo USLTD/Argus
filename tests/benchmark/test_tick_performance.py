@@ -116,7 +116,9 @@ def test_per_subsystem_latency(
             fake_driver.tick_network(driver_ctx),
         ]
 
-    benchmark.extra_info["subsystems"] = "8 (cpu, memory, processes, gpu, sensors, battery, disk, network)"
+    benchmark.extra_info["subsystems"] = (
+        "8 (cpu, memory, processes, gpu, sensors, battery, disk, network)"
+    )
     benchmark(_tick_all_subsystems)
 
 
@@ -171,16 +173,46 @@ def test_converter_throughput(
     )
     mem_collection = MetricsCollection[MemoryMetric](
         metadata=MetricMetadata(),
-        metrics=[MemoryMetric(total_bytes=16_000_000_000, used_bytes=8_000_000_000,
-                              available_bytes=8_000_000_000, percent=50.0)],
+        metrics=[
+            MemoryMetric(
+                total_bytes=16_000_000_000,
+                used_bytes=8_000_000_000,
+                available_bytes=8_000_000_000,
+                percent=50.0,
+            )
+        ],
     )
     proc_collection = MetricsCollection[ProcessMetric](
         metadata=MetricMetadata(),
         metrics=[
-            ProcessMetric(pid=1, name="init", cpu_percent=0.5, memory_rss=2_000_000, status="running"),
-            ProcessMetric(pid=100, name="python", cpu_percent=15.0, memory_rss=50_000_000, status="running"),
-            ProcessMetric(pid=200, name="chrome", cpu_percent=8.0, memory_rss=300_000_000, status="running"),
-            ProcessMetric(pid=300, name="sleep", cpu_percent=0.0, memory_rss=1_000_000, status="sleeping"),
+            ProcessMetric(
+                pid=1,
+                name="init",
+                cpu_percent=0.5,
+                memory_rss=2_000_000,
+                status="running",
+            ),
+            ProcessMetric(
+                pid=100,
+                name="python",
+                cpu_percent=15.0,
+                memory_rss=50_000_000,
+                status="running",
+            ),
+            ProcessMetric(
+                pid=200,
+                name="chrome",
+                cpu_percent=8.0,
+                memory_rss=300_000_000,
+                status="running",
+            ),
+            ProcessMetric(
+                pid=300,
+                name="sleep",
+                cpu_percent=0.0,
+                memory_rss=1_000_000,
+                status="sleeping",
+            ),
         ],
     )
 

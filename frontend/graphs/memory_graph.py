@@ -5,24 +5,16 @@ from frontend.core.engine_bridge import EngineBridge
 
 
 class MemoryGraph(BaseGraph):
-
     def __init__(self, bridge: EngineBridge | None = None) -> None:
 
-        super().__init__(
-            "Memory Usage %"
-        )
+        super().__init__("Memory Usage %")
 
         self._bridge: EngineBridge | None = bridge
 
-        self.graph.setYRange(
-            0,
-            100
-        )
+        self.graph.setYRange(0, 100)
 
         if self._bridge:
-            self._bridge.state_updated.connect(
-                self._on_state
-            )
+            self._bridge.state_updated.connect(self._on_state)
 
     def _on_state(self, ctx: BridgeContext) -> None:
         self.refresh()
@@ -34,6 +26,4 @@ class MemoryGraph(BaseGraph):
 
         memory = self._bridge.get_memory_metrics()
 
-        self.update_value(
-            memory["percent"]
-        )
+        self.update_value(memory["percent"])

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from PyQt6.QtCore import QObject, pyqtSignal, QTimer
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer, QThreadPool, QRunnable
 
 from backend.interfaces.contexts import BridgeContext
 
@@ -17,6 +17,7 @@ from backend.interfaces.caps import UnavailableInfo
 from backend.interfaces.caps import dump_static_info as _dump
 from backend.interfaces.enums import Permission
 from backend.interfaces.permissions import PermissionHierarchy
+from frontend.core.history_manager import HistoryManager
 
 
 # ------------------------------------------------------------------
@@ -79,6 +80,7 @@ class SystemLoadDict(TypedDict):
 
 class StaticInfoDict(TypedDict, total=False):
     """Static system info with nested sub-model keys."""
+
     cpu: dict
     gpu: dict
     motherboard: dict
@@ -104,6 +106,35 @@ class AggregatedStateDict(TypedDict):
     boot_time: float
     load: SystemLoadDict
     static_info: StaticInfoDict
+
+
+# ------------------------------------------------------------------
+# Async helpers  —  QThreadPool workers for offloading bridge calls
+# ------------------------------------------------------------------
+
+
+class _WorkerSignals(QObject):
+    """Signals for _Worker to communicate results back to the UI thread."""
+
+    finished = pyqtSignal(object)
+
+
+class _Worker(QRunnable):
+    """Runs a callable in a QThreadPool thread and emits the result."""
+
+    def __init__(self, fn, *args, **kwargs):
+        super().__init__()
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = _WorkerSignals()
+
+    def run(self):
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+            self.signals.finished.emit(result)
+        except Exception as e:
+            self.signals.finished.emit(e)
 
 
 # ------------------------------------------------------------------
@@ -147,6 +178,7 @@ class EngineBridge(QObject):
         self._timer.timeout.connect(self._tick)
         self._state_cache: dict[str, Any] | None = None
         self._last_network_io: NetworkIODict | None = None
+        self._history = HistoryManager()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -174,6 +206,10 @@ class EngineBridge(QObject):
         data = self.get_all()
         ctx = BridgeContext(data=data, bridge=self)
         self.state_updated.emit(ctx)
+        try:
+            self._history.save(ctx)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Permission check
@@ -186,9 +222,7 @@ class EngineBridge(QObject):
         """
         if self._permissions is None:
             return True
-        return any(
-            PermissionHierarchy.grants(p, required) for p in self._permissions
-        )
+        return any(PermissionHierarchy.grants(p, required) for p in self._permissions)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -222,13 +256,27 @@ class EngineBridge(QObject):
         return getattr(getattr(self._engine, "loader", None), "active_driver", None)
 
     # ------------------------------------------------------------------
+    # History / Time Machine
+    # ------------------------------------------------------------------
+
+    def get_history_snapshot(self, timestamp: str) -> dict | None:
+        """Return the closest historical snapshot before *timestamp* (or None)."""
+        return self._history.get_snapshot(timestamp)
+
+    # ------------------------------------------------------------------
     # Public API  —  each method returns a TypedDict
     # ------------------------------------------------------------------
 
     def get_cpu_metrics(self) -> CpuMetricsDict:
         """CPU usage, per-core breakdown, frequency and core counts."""
         if not self._check(Permission.CPU_READ):
-            return CpuMetricsDict(cpu_percent=0.0, per_core=[], frequency=None, physical_cores=0, logical_cores=0)
+            return CpuMetricsDict(
+                cpu_percent=0.0,
+                per_core=[],
+                frequency=None,
+                physical_cores=0,
+                logical_cores=0,
+            )
         state = self._state
         cpu = state.get("cpu", {})
         assert isinstance(cpu, dict)
@@ -236,9 +284,7 @@ class EngineBridge(QObject):
         agg = metrics[0] if metrics else {}
 
         per_core_data = [
-            m["usage_percent"]
-            for m in metrics[1:]
-            if "usage_percent" in m
+            m["usage_percent"] for m in metrics[1:] if "usage_percent" in m
         ]
 
         static = state.get("static_info", {})
@@ -256,7 +302,9 @@ class EngineBridge(QObject):
     def get_memory_metrics(self) -> MemoryMetricsDict:
         """RAM totals, usage, available, free, cached and percent."""
         if not self._check(Permission.MEMORY_READ):
-            return MemoryMetricsDict(total=0, used=0, available=0, free=0, cached=0, percent=0.0)
+            return MemoryMetricsDict(
+                total=0, used=0, available=0, free=0, cached=0, percent=0.0
+            )
         state = self._state
         ram = state.get("ram", {})
         assert isinstance(ram, dict)
@@ -299,7 +347,9 @@ class EngineBridge(QObject):
             return NetworkIODict(bytes_sent=0, bytes_recv=0)
         state = self._state
         net_container = state.get("network", {})
-        net_list = net_container.get("metrics", []) if isinstance(net_container, dict) else []
+        net_list = (
+            net_container.get("metrics", []) if isinstance(net_container, dict) else []
+        )
         total_sent = 0
         total_recv = 0
         for iface in net_list:
@@ -353,7 +403,11 @@ class EngineBridge(QObject):
             return {}
         state = self._state
         sens_container = state.get("sensors", {})
-        sensor_list = sens_container.get("metrics", []) if isinstance(sens_container, dict) else []
+        sensor_list = (
+            sens_container.get("metrics", [])
+            if isinstance(sens_container, dict)
+            else []
+        )
         temps: dict[str, list[float]] = {}
         for s in sensor_list:
             if isinstance(s, dict):
@@ -372,7 +426,11 @@ class EngineBridge(QObject):
         metrics = cpu.get("metrics", [{}])
         agg = metrics[0] if metrics else {}
         proc_container = state.get("processes", {})
-        proc_list = proc_container.get("metrics", []) if isinstance(proc_container, dict) else []
+        proc_list = (
+            proc_container.get("metrics", [])
+            if isinstance(proc_container, dict)
+            else []
+        )
         return SystemLoadDict(
             cpu_percent=agg.get("usage_percent", 0.0),
             processes=len(proc_list) if isinstance(proc_list, list) else 0,
@@ -417,7 +475,11 @@ class EngineBridge(QObject):
             return []
         state = self._state
         storage_container = state.get("storage", {})
-        storage_list = storage_container.get("metrics", []) if isinstance(storage_container, dict) else []
+        storage_list = (
+            storage_container.get("metrics", [])
+            if isinstance(storage_container, dict)
+            else []
+        )
         return [
             {
                 "device": "",
@@ -484,6 +546,27 @@ class EngineBridge(QObject):
         )
 
     # ------------------------------------------------------------------
+    # Async execution  (offload blocking calls to QThreadPool)
+    # ------------------------------------------------------------------
+
+    def run_async(self, fn, callback, *args, **kwargs):
+        """Run *fn* in a background thread and call *callback* with the result on the UI thread.
+
+        Parameters
+        ----------
+        fn : callable
+            The blocking function to run off the UI thread.
+        callback : callable
+            Invoked on the UI thread (via pyqtSignal) with *fn*'s return value,
+            or an ``Exception`` instance if *fn* raised.
+        *args, **kwargs
+            Forwarded to *fn*.
+        """
+        worker = _Worker(fn, *args, **kwargs)
+        worker.signals.finished.connect(callback)
+        QThreadPool.globalInstance().start(worker)
+
+    # ------------------------------------------------------------------
     # Process management  (delegates to driver.manage_process)
     # ------------------------------------------------------------------
 
@@ -532,9 +615,7 @@ class EngineBridge(QObject):
         except Exception:
             pass
 
-    def set_script_permissions(
-        self, name: str, permissions: list[Permission]
-    ) -> None:
+    def set_script_permissions(self, name: str, permissions: list[Permission]) -> None:
         """Update a script's allowed permissions by name."""
         if self._engine is None:
             return
@@ -552,6 +633,10 @@ class EngineBridge(QObject):
         if self._engine is None:
             return {}
         return self._engine.get_config()
+
+    def get_config(self) -> dict[str, Any]:
+        """Alias for :meth:`read_config` — used by UI pages."""
+        return self.read_config()
 
     def write_config(self, key: str, value: Any) -> None:
         """Write a single config value through the engine."""

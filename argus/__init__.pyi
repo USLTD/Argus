@@ -33,7 +33,6 @@ from backend.interfaces.enums import Permission as _Permission
 from backend.interfaces.plugins import PluginMeta as _PluginMeta
 from ._common import Hook, ScriptContext
 
-
 # ---------------------------------------------------------------------------
 # Lifecycle namespace
 # ---------------------------------------------------------------------------
@@ -45,7 +44,6 @@ class _Lifecycle:
     """Called when the script is loaded (receives :class:`ScriptContext[None]`)."""
     on_unload: Hook
     """Called when the script is unloaded (receives :class:`ScriptContext[None]`)."""
-
 
 # ---------------------------------------------------------------------------
 # Subsystem event namespaces
@@ -135,7 +133,6 @@ class _Events:
     sensor: _SensorEvents
     users: _UsersEvents
 
-
 # ---------------------------------------------------------------------------
 # API namespace
 # ---------------------------------------------------------------------------
@@ -172,7 +169,6 @@ class _Api:
     def kill_process(pid: int) -> bool:
         """Kill the process identified by *pid*. Returns ``True`` on success."""
 
-
 # ---------------------------------------------------------------------------
 # Script namespace
 # ---------------------------------------------------------------------------
@@ -184,7 +180,6 @@ class _Script:
     Permission = _Permission
     Metadata = _PluginMeta
 
-
 # ---------------------------------------------------------------------------
 # Module-level attributes (injected by PythonScriptWrapper)
 # ---------------------------------------------------------------------------
@@ -193,4 +188,3 @@ lifecycle: TypeAlias = _Lifecycle
 events: TypeAlias = _Events
 api: TypeAlias = _Api
 script: TypeAlias = _Script
-

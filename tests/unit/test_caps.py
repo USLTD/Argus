@@ -55,7 +55,11 @@ def _ram() -> MemoryMetrics:
     """Helper: build a MemoryMetrics with sensible defaults."""
     return MemoryMetrics(
         metadata=MetricMetadata(collected_at=time.time()),
-        metrics=[MemoryMetric(total_bytes=1000, used_bytes=500, available_bytes=500, percent=50.0)],
+        metrics=[
+            MemoryMetric(
+                total_bytes=1000, used_bytes=500, available_bytes=500, percent=50.0
+            )
+        ],
     )
 
 
@@ -84,7 +88,10 @@ class TestGPUMetrics:
             metadata=MetricMetadata(collected_at=time.time()),
             metrics=[
                 GPUMetric(
-                    name="TestGPU", usage_percent=50.0, memory_total=1000, memory_used=500
+                    name="TestGPU",
+                    usage_percent=50.0,
+                    memory_total=1000,
+                    memory_used=500,
                 )
             ],
         )
@@ -131,7 +138,9 @@ class TestUserMetric:
         assert u.started == 0.0
 
     def test_all_fields(self) -> None:
-        u = UserMetric(name="alice", terminal="/dev/pts/0", host="laptop", started=1000.0)
+        u = UserMetric(
+            name="alice", terminal="/dev/pts/0", host="laptop", started=1000.0
+        )
         assert u.name == "alice"
         assert u.terminal == "/dev/pts/0"
         assert u.host == "laptop"
@@ -187,7 +196,9 @@ class TestSystemMetrics:
 
 class TestCpuInfo:
     def test_happy_path(self) -> None:
-        c = CpuInfo(name="Intel i7", physical_cores=4, logical_cores=8, frequency_mhz=3500.0)
+        c = CpuInfo(
+            name="Intel i7", physical_cores=4, logical_cores=8, frequency_mhz=3500.0
+        )
         d = c.model_dump()
         assert d["name"] == "Intel i7"
         assert d["physical_cores"] == 4
@@ -202,13 +213,21 @@ class TestCpuInfo:
         )
         d = c.model_dump()
         assert d["name"] == "Intel i7"
-        assert d["frequency_mhz"] == {"unavailable": True, "reason": "unsupported", "detail": ""}
+        assert d["frequency_mhz"] == {
+            "unavailable": True,
+            "reason": "unsupported",
+            "detail": "",
+        }
 
     def test_defaults(self) -> None:
         c = CpuInfo()
         d = c.model_dump()
         assert d["name"] == {"unavailable": True, "reason": "unsupported", "detail": ""}
-        assert d["physical_cores"] == {"unavailable": True, "reason": "unsupported", "detail": ""}
+        assert d["physical_cores"] == {
+            "unavailable": True,
+            "reason": "unsupported",
+            "detail": "",
+        }
 
     def test_frequency_none(self) -> None:
         c = CpuInfo(name="test", physical_cores=2, logical_cores=4, frequency_mhz=None)
@@ -236,12 +255,21 @@ class TestGpuInfo:
 class TestStaticSystemInfo:
     def test_full_construction(self) -> None:
         info = StaticSystemInfo(
-            cpu=CpuInfo(name="Test CPU", physical_cores=4, logical_cores=8, frequency_mhz=3000.0),
+            cpu=CpuInfo(
+                name="Test CPU", physical_cores=4, logical_cores=8, frequency_mhz=3000.0
+            ),
             gpu=GpuInfo(name="Test GPU", driver="v1", vram_bytes=8000),
-            motherboard=MotherboardInfo(manufacturer="ASUS", model="Z790", bios_version="v2.1"),
+            motherboard=MotherboardInfo(
+                manufacturer="ASUS", model="Z790", bios_version="v2.1"
+            ),
             os=OsInfo(name="Windows", version="10", architecture="x64"),
             memory=MemoryInfo(total_ram_bytes=16_000_000_000),
-            system=SystemInfo(hostname="pc", username="user", python_version="3.12", boot_time="2024-01-01"),
+            system=SystemInfo(
+                hostname="pc",
+                username="user",
+                python_version="3.12",
+                boot_time="2024-01-01",
+            ),
         )
         d = info.model_dump()
         assert d["cpu"]["name"] == "Test CPU"
@@ -253,36 +281,66 @@ class TestStaticSystemInfo:
 
     def test_unavailable_fields(self) -> None:
         info = StaticSystemInfo(
-            cpu=CpuInfo(name="CPU", physical_cores=4, logical_cores=8, frequency_mhz=UnavailableInfo(reason="error", detail="failed to read")),
+            cpu=CpuInfo(
+                name="CPU",
+                physical_cores=4,
+                logical_cores=8,
+                frequency_mhz=UnavailableInfo(reason="error", detail="failed to read"),
+            ),
             gpu=GpuInfo(
                 name=UnavailableInfo(reason="unsupported"),
                 driver=UnavailableInfo(reason="unsupported"),
                 vram_bytes=UnavailableInfo(reason="unsupported"),
             ),
-            motherboard=MotherboardInfo(manufacturer="ASUS", model="Z790", bios_version=None),
+            motherboard=MotherboardInfo(
+                manufacturer="ASUS", model="Z790", bios_version=None
+            ),
             os=OsInfo(name="Linux", version="Ubuntu", architecture="x64"),
             memory=MemoryInfo(total_ram_bytes=8000),
-            system=SystemInfo(hostname="srv", username="root", python_version="3.11", boot_time="2024-06-01"),
+            system=SystemInfo(
+                hostname="srv",
+                username="root",
+                python_version="3.11",
+                boot_time="2024-06-01",
+            ),
         )
         d = info.model_dump()
-        assert d["cpu"]["frequency_mhz"] == {"unavailable": True, "reason": "error", "detail": "failed to read"}
-        assert d["gpu"]["name"] == {"unavailable": True, "reason": "unsupported", "detail": ""}
+        assert d["cpu"]["frequency_mhz"] == {
+            "unavailable": True,
+            "reason": "error",
+            "detail": "failed to read",
+        }
+        assert d["gpu"]["name"] == {
+            "unavailable": True,
+            "reason": "unsupported",
+            "detail": "",
+        }
 
     def test_dump_static_info(self) -> None:
         info = StaticSystemInfo(
-            cpu=CpuInfo(name="CPU", physical_cores=4, logical_cores=8, frequency_mhz=3000.0),
+            cpu=CpuInfo(
+                name="CPU", physical_cores=4, logical_cores=8, frequency_mhz=3000.0
+            ),
             gpu=GpuInfo(
                 name=UnavailableInfo(reason="unsupported"),
                 driver=UnavailableInfo(reason="unsupported"),
                 vram_bytes=UnavailableInfo(reason="unsupported"),
             ),
-            motherboard=MotherboardInfo(manufacturer="MFR", model="X", bios_version="1.0"),
+            motherboard=MotherboardInfo(
+                manufacturer="MFR", model="X", bios_version="1.0"
+            ),
             os=OsInfo(name="OS", version="1", architecture="x86"),
             memory=MemoryInfo(total_ram_bytes=4096),
-            system=SystemInfo(hostname="h", username="u", python_version="3.9", boot_time="now"),
+            system=SystemInfo(
+                hostname="h", username="u", python_version="3.9", boot_time="now"
+            ),
         )
         d = dump_static_info(info)
         assert d["cpu"]["name"] == "CPU"
-        assert d["gpu"]["name"] == {"unavailable": True, "reason": "unsupported", "detail": ""}
+        assert d["gpu"]["name"] == {
+            "unavailable": True,
+            "reason": "unsupported",
+            "detail": "",
+        }
         # Also verify the model_dump roundtrip doesn't raise
         _ = info.model_dump(mode="json")

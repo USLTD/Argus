@@ -109,8 +109,15 @@ class TestSyncBridgeGetAll:
         data = bridge.get_all()
 
         expected_keys = {
-            "cpu", "memory", "disk", "network", "processes",
-            "sensors", "battery", "static_info", "boot_time",
+            "cpu",
+            "memory",
+            "disk",
+            "network",
+            "processes",
+            "sensors",
+            "battery",
+            "static_info",
+            "boot_time",
         }
         assert expected_keys.issubset(data.keys())
 
@@ -211,11 +218,21 @@ class TestSyncBridgeEdgeCases:
         bridge = SyncBridge(fake_driver, permissions=set())
         cpu = bridge.get_cpu_metrics()
         assert cpu == {
-            "cpu_percent": 0.0, "per_core": [], "frequency": None,
-            "physical_cores": 0, "logical_cores": 0,
+            "cpu_percent": 0.0,
+            "per_core": [],
+            "frequency": None,
+            "physical_cores": 0,
+            "logical_cores": 0,
         }
         mem = bridge.get_memory_metrics()
-        assert mem == {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+        assert mem == {
+            "total": 0,
+            "used": 0,
+            "available": 0,
+            "free": 0,
+            "cached": 0,
+            "percent": 0.0,
+        }
         procs = bridge.get_process_list()
         assert procs == []
 

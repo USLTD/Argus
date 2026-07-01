@@ -7,7 +7,6 @@ from frontend.core.database import DatabaseManager as _DatabaseManager
 P = ParamSpec("P")
 R = TypeVar("R")
 
-
 # ---------------------------------------------------------------------------
 # Context types
 # ---------------------------------------------------------------------------
@@ -23,14 +22,12 @@ class ScriptContext[T]:
     db: _DatabaseManager | None = None
     driver: _DriverProxy | None = None
 
-
 @final
 class DriverContext:
     """Context passed to driver lifecycle hooks."""
 
     data: SystemMetrics | None = None
     engine: object = None
-
 
 # ---------------------------------------------------------------------------
 # Callback slot (``Hook`` is the decorator/assignment type)
@@ -46,5 +43,4 @@ class Hook:
 
     callback: Callable[..., Any] | None
 
-    def __call__(self, func: Callable[P, R]) -> Callable[P, R]:
-        ...
+    def __call__(self, func: Callable[P, R]) -> Callable[P, R]: ...

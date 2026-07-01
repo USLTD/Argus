@@ -12,6 +12,7 @@ from backend.interfaces.caps import SystemCapabilities
 from backend.interfaces.enums import Permission
 from backend.interfaces.plugins import BaseDriver, PluginMeta
 
+
 @final
 class DriverProxy:
     """
@@ -24,7 +25,12 @@ class DriverProxy:
 
     __slots__ = ("_driver", "_perms", "_meta")
 
-    def __init__(self, driver: BaseDriver | None, perms: set[Permission] | None = None, meta: PluginMeta | None = None) -> None:
+    def __init__(
+        self,
+        driver: BaseDriver | None,
+        perms: set[Permission] | None = None,
+        meta: PluginMeta | None = None,
+    ) -> None:
         self._driver = driver
         self._perms = perms or set()
         self._meta = meta

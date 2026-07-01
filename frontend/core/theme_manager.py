@@ -2,7 +2,6 @@ from pathlib import Path
 
 
 class ThemeManager:
-
     THEMES = {
         "dark": "frontend/themes/dark.qss",
     }
@@ -18,6 +17,4 @@ class ThemeManager:
         path = Path(cls.THEMES[theme_name])
 
         if path.exists():
-            app.setStyleSheet(
-                path.read_text(encoding="utf-8")
-            )
+            app.setStyleSheet(path.read_text(encoding="utf-8"))

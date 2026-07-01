@@ -54,9 +54,7 @@ class TestSetConfig:
         with pytest.raises(ValueError, match="Invalid value for 'poll_interval_ms'"):
             engine.set_config("poll_interval_ms", "notanint")
 
-    def test_set_script_batch_size_resizes_pool(
-        self, engine: BackendEngine
-    ) -> None:
+    def test_set_script_batch_size_resizes_pool(self, engine: BackendEngine) -> None:
         """script_batch_size replaces the thread-pool executor."""
         old_executor = engine._executor
         original_workers = old_executor._max_workers
@@ -97,9 +95,7 @@ class TestGetConfig:
         }
         assert set(cfg.keys()) == expected_keys
 
-    def test_get_config_after_set_reflects_change(
-        self, engine: BackendEngine
-    ) -> None:
+    def test_get_config_after_set_reflects_change(self, engine: BackendEngine) -> None:
         """set_config then get_config shows the updated value."""
         engine.set_config("poll_interval_ms", 2000)
         cfg = engine.get_config()

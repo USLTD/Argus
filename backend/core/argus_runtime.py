@@ -29,10 +29,17 @@ if TYPE_CHECKING:
     from backend.core.python_script import PythonScriptWrapper
 
 from backend.interfaces.contexts import (
-    GeneralTickData, CpuTickData, MemoryTickData,
-    DiskTickData, NetworkTickData, ProcessTickData,
-    GpuTickData, BatteryTickData, SensorTickData,
-    UserTickData, ScriptContext,
+    GeneralTickData,
+    CpuTickData,
+    MemoryTickData,
+    DiskTickData,
+    NetworkTickData,
+    ProcessTickData,
+    GpuTickData,
+    BatteryTickData,
+    SensorTickData,
+    UserTickData,
+    ScriptContext,
 )
 from backend.interfaces.enums import Permission
 
@@ -43,6 +50,7 @@ T = TypeVar("T", bound=Callable[..., object])
 # ---------------------------------------------------------------------------
 # Callback slot
 # ---------------------------------------------------------------------------
+
 
 class CallbackSlot(Generic[T]):
     """A slot that supports **both** decorator and assignment registration.
@@ -75,6 +83,7 @@ class CallbackSlot(Generic[T]):
 # Lifecycle namespace  (argus.lifecycle.*)
 # ---------------------------------------------------------------------------
 
+
 class LifecycleNamespace:
     """``argus.lifecycle`` — script lifecycle events."""
 
@@ -90,67 +99,102 @@ class LifecycleNamespace:
 # Events namespace  (argus.events.<subsystem>.<event>)
 # ---------------------------------------------------------------------------
 
+
 class GeneralEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[GeneralTickData]], None]]
+
     def __init__(self) -> None:
         self.on_tick = CallbackSlot[Callable[[ScriptContext[GeneralTickData]], None]]()
 
+
 class CpuEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[CpuTickData]], None]]
+
     def __init__(self) -> None:
         self.on_tick = CallbackSlot[Callable[[ScriptContext[CpuTickData]], None]]()
 
+
 class MemoryEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[MemoryTickData]], None]]
+
     def __init__(self) -> None:
         self.on_tick = CallbackSlot[Callable[[ScriptContext[MemoryTickData]], None]]()
+
 
 class DiskEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[list[DiskTickData]]], None]]
     on_read: CallbackSlot[Callable[[ScriptContext[DiskTickData]], None]]
     on_write: CallbackSlot[Callable[[ScriptContext[DiskTickData]], None]]
+
     def __init__(self) -> None:
-        self.on_tick = CallbackSlot[Callable[[ScriptContext[list[DiskTickData]]], None]]()
+        self.on_tick = CallbackSlot[
+            Callable[[ScriptContext[list[DiskTickData]]], None]
+        ]()
         self.on_read = CallbackSlot[Callable[[ScriptContext[DiskTickData]], None]]()
         self.on_write = CallbackSlot[Callable[[ScriptContext[DiskTickData]], None]]()
+
 
 class NetEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[list[NetworkTickData]]], None]]
     on_rx: CallbackSlot[Callable[[ScriptContext[NetworkTickData]], None]]
     on_tx: CallbackSlot[Callable[[ScriptContext[NetworkTickData]], None]]
+
     def __init__(self) -> None:
-        self.on_tick = CallbackSlot[Callable[[ScriptContext[list[NetworkTickData]]], None]]()
+        self.on_tick = CallbackSlot[
+            Callable[[ScriptContext[list[NetworkTickData]]], None]
+        ]()
         self.on_rx = CallbackSlot[Callable[[ScriptContext[NetworkTickData]], None]]()
         self.on_tx = CallbackSlot[Callable[[ScriptContext[NetworkTickData]], None]]()
+
 
 class ProcessEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[list[ProcessTickData]]], None]]
     on_spawn: CallbackSlot[Callable[[ScriptContext[ProcessTickData]], None]]
     on_exit: CallbackSlot[Callable[[ScriptContext[ProcessTickData]], None]]
+
     def __init__(self) -> None:
-        self.on_tick = CallbackSlot[Callable[[ScriptContext[list[ProcessTickData]]], None]]()
+        self.on_tick = CallbackSlot[
+            Callable[[ScriptContext[list[ProcessTickData]]], None]
+        ]()
         self.on_spawn = CallbackSlot[Callable[[ScriptContext[ProcessTickData]], None]]()
         self.on_exit = CallbackSlot[Callable[[ScriptContext[ProcessTickData]], None]]()
 
+
 class GpuEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[GpuTickData | None]], None]]
+
     def __init__(self) -> None:
-        self.on_tick = CallbackSlot[Callable[[ScriptContext[GpuTickData | None]], None]]()
+        self.on_tick = CallbackSlot[
+            Callable[[ScriptContext[GpuTickData | None]], None]
+        ]()
+
 
 class BatteryEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[BatteryTickData | None]], None]]
+
     def __init__(self) -> None:
-        self.on_tick = CallbackSlot[Callable[[ScriptContext[BatteryTickData | None]], None]]()
+        self.on_tick = CallbackSlot[
+            Callable[[ScriptContext[BatteryTickData | None]], None]
+        ]()
+
 
 class SensorEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[list[SensorTickData] | None]], None]]
+
     def __init__(self) -> None:
-        self.on_tick = CallbackSlot[Callable[[ScriptContext[list[SensorTickData] | None]], None]]()
+        self.on_tick = CallbackSlot[
+            Callable[[ScriptContext[list[SensorTickData] | None]], None]
+        ]()
+
 
 class UsersEvents:
     on_tick: CallbackSlot[Callable[[ScriptContext[list[UserTickData] | None]], None]]
+
     def __init__(self) -> None:
-        self.on_tick = CallbackSlot[Callable[[ScriptContext[list[UserTickData] | None]], None]]()
+        self.on_tick = CallbackSlot[
+            Callable[[ScriptContext[list[UserTickData] | None]], None]
+        ]()
+
 
 class EventsNamespace:
     """``argus.events`` — subsystem event callbacks."""
@@ -183,6 +227,7 @@ class EventsNamespace:
 # API namespace  (argus.api.*)
 # ---------------------------------------------------------------------------
 
+
 class ApiNamespace:
     """``argus.api`` — sandbox-safe utility functions."""
 
@@ -214,6 +259,7 @@ class ApiNamespace:
 
     def timestamp(self) -> float:
         import time
+
         return time.time()
 
     def format_bytes(self, size: int | float) -> str:
@@ -229,6 +275,7 @@ class ApiNamespace:
 # ---------------------------------------------------------------------------
 # Script namespace  (argus.script.*)
 # ---------------------------------------------------------------------------
+
 
 class ScriptNamespace:
     """``argus.script`` — permission and script utilities."""
@@ -260,6 +307,7 @@ class TypesNamespace:
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
+
 
 def create_argus_namespace(wrapper: PythonScriptWrapper) -> ModuleType:
     """Create a fresh ``argus`` module namespace for a single script.

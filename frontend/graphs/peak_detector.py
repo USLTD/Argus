@@ -1,5 +1,4 @@
 class PeakDetector:
-
     @staticmethod
     def peak(values):
 

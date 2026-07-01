@@ -5,12 +5,9 @@ from frontend.core.engine_bridge import EngineBridge
 
 
 class CPUGraph(BaseGraph):
-
     def __init__(self, bridge: EngineBridge | None = None) -> None:
 
-        super().__init__(
-            "CPU Usage %"
-        )
+        super().__init__("CPU Usage %")
 
         self._bridge: EngineBridge | None = bridge
 
@@ -24,7 +21,4 @@ class CPUGraph(BaseGraph):
 
         cpu = self._bridge.get_cpu_metrics()["cpu_percent"]
 
-
-        self.update_value(
-            cpu
-        )
+        self.update_value(cpu)

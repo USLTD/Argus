@@ -27,6 +27,12 @@ class TestBaseUserScript:
         assert isinstance(instance, BaseUserScript)
 
     def test_required_methods(self) -> None:
-        methods = ["bind_driver", "trigger_load", "trigger_unload", "dispatch", "pop_output"]
+        methods = [
+            "bind_driver",
+            "trigger_load",
+            "trigger_unload",
+            "dispatch",
+            "pop_output",
+        ]
         for name in methods:
             assert hasattr(BaseUserScript, name), f"Missing method: {name}"

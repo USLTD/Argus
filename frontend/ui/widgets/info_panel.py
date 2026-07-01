@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout
 
+
 class SystemSummary(QWidget):
     def __init__(self):
         super().__init__()

@@ -32,7 +32,9 @@ class AsyncBridge:
     event loop is never blocked.
     """
 
-    def __init__(self, driver: BaseDriver, permissions: set[Permission] | None = None) -> None:
+    def __init__(
+        self, driver: BaseDriver, permissions: set[Permission] | None = None
+    ) -> None:
         self._driver = driver
         self._permissions = permissions
         self._snapshot: TickSnapshot | None = None
@@ -49,9 +51,7 @@ class AsyncBridge:
             return True
         from backend.interfaces.permissions import PermissionHierarchy
 
-        return any(
-            PermissionHierarchy.grants(p, required) for p in self._permissions
-        )
+        return any(PermissionHierarchy.grants(p, required) for p in self._permissions)
 
     # ── lifecycle ──────────────────────────────────────────────────
 
@@ -94,8 +94,15 @@ class AsyncBridge:
     async def get_cpu_metrics(self) -> dict:
         """Return CPU metrics as a flat dict."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.CPU_READ):
-            return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
+            return {
+                "cpu_percent": 0.0,
+                "per_core": [],
+                "frequency": None,
+                "physical_cores": 0,
+                "logical_cores": 0,
+            }
         from backend.interfaces.contexts import DriverContext
         from backend.interfaces.sentinels import Unavailable
 
@@ -103,7 +110,13 @@ class AsyncBridge:
         ctx = DriverContext()
         cpu_data = await loop.run_in_executor(None, self._driver.tick_cpu, ctx)
         if isinstance(cpu_data, Unavailable):
-            return {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
+            return {
+                "cpu_percent": 0.0,
+                "per_core": [],
+                "frequency": None,
+                "physical_cores": 0,
+                "logical_cores": 0,
+            }
         static = self._driver.get_static_info()
         if static is not None:
             raw_cores = static.cpu.physical_cores
@@ -121,8 +134,16 @@ class AsyncBridge:
     async def get_memory_metrics(self) -> dict:
         """Return memory metrics as a flat dict."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.MEMORY_READ):
-            return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+            return {
+                "total": 0,
+                "used": 0,
+                "available": 0,
+                "free": 0,
+                "cached": 0,
+                "percent": 0.0,
+            }
         from backend.interfaces.contexts import DriverContext
         from backend.interfaces.sentinels import Unavailable
 
@@ -130,12 +151,20 @@ class AsyncBridge:
         ctx = DriverContext()
         mem_data = await loop.run_in_executor(None, self._driver.tick_memory, ctx)
         if isinstance(mem_data, Unavailable):
-            return {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+            return {
+                "total": 0,
+                "used": 0,
+                "available": 0,
+                "free": 0,
+                "cached": 0,
+                "percent": 0.0,
+            }
         return memory_collection_to_dict(mem_data)
 
     async def get_disk_usage(self, path: str = "/") -> dict:
         """Return disk usage for *path* as a flat dict."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.DISK_READ):
             return {"total": 0, "used": 0, "free": 0, "percent": 0.0}
         from backend.interfaces.contexts import DriverContext
@@ -151,6 +180,7 @@ class AsyncBridge:
     async def get_network_io(self) -> dict:
         """Return aggregate network IO as a flat dict."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.NETWORK_READ):
             return {"bytes_sent": 0, "bytes_recv": 0}
         from backend.interfaces.contexts import DriverContext
@@ -166,6 +196,7 @@ class AsyncBridge:
     async def get_process_list(self) -> list[dict]:
         """Return process list as a list of flat dicts."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.PROCESSES_READ):
             return []
         from backend.interfaces.contexts import DriverContext
@@ -181,6 +212,7 @@ class AsyncBridge:
     async def get_sensors(self) -> dict:
         """Return sensor temperatures as a dict."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.SENSORS_READ):
             return {"temperatures": {}}
         from backend.interfaces.contexts import DriverContext
@@ -196,6 +228,7 @@ class AsyncBridge:
     async def get_battery(self) -> dict:
         """Return battery info as a flat dict."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.BATTERY_READ):
             return {"percent": 0.0, "power_plugged": None, "seconds_left": None}
         from backend.interfaces.contexts import DriverContext
@@ -211,17 +244,20 @@ class AsyncBridge:
     async def get_static_info(self) -> dict:
         """Return static system info as a nested dict."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.SYSTEM_READ):
             return {}
         info = self._driver.get_static_info()
         if info is None:
             return {}
         from backend.interfaces.caps import dump_static_info as _dump
+
         return _dump(info)
 
     async def get_boot_time(self) -> float:
         """Return boot time as a Unix timestamp."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.SYSTEM_READ):
             return 0.0
         info = self._driver.get_static_info()
@@ -229,6 +265,7 @@ class AsyncBridge:
             return 0.0
         from backend.interfaces.caps import UnavailableInfo
         from datetime import datetime
+
         boot_time_val = info.system.boot_time
         if isinstance(boot_time_val, UnavailableInfo):
             return 0.0
@@ -237,6 +274,7 @@ class AsyncBridge:
     async def terminate_process(self, pid: int) -> bool:
         """Ask the driver to terminate *pid* gracefully."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.PROCESSES_WRITE):
             return False
         try:
@@ -247,6 +285,7 @@ class AsyncBridge:
     async def kill_process(self, pid: int) -> bool:
         """Ask the driver to force-kill *pid*."""
         from backend.interfaces.enums import Permission
+
         if not self._check(Permission.PROCESSES_EXECUTE):
             return False
         try:
@@ -262,7 +301,15 @@ class AsyncBridge:
 
         snap = self._snapshot
         if snap is None:
-            return {"cpu": {}, "memory": {}, "disk": {}, "network": {}, "processes": [], "sensors": {}, "battery": {}}
+            return {
+                "cpu": {},
+                "memory": {},
+                "disk": {},
+                "network": {},
+                "processes": [],
+                "sensors": {},
+                "battery": {},
+            }
 
         u = Unavailable
 
@@ -276,15 +323,30 @@ class AsyncBridge:
                 threads = raw_threads if isinstance(raw_threads, int) else 0
             else:
                 cores = threads = 0
-            cpu = cpu_collection_to_dict(snap.cpu, static_cores=cores, static_threads=threads)
+            cpu = cpu_collection_to_dict(
+                snap.cpu, static_cores=cores, static_threads=threads
+            )
         else:
-            cpu = {"cpu_percent": 0.0, "per_core": [], "frequency": None, "physical_cores": 0, "logical_cores": 0}
+            cpu = {
+                "cpu_percent": 0.0,
+                "per_core": [],
+                "frequency": None,
+                "physical_cores": 0,
+                "logical_cores": 0,
+            }
 
         memory: dict
         if self._check(Permission.MEMORY_READ) and not isinstance(snap.memory, u):
             memory = memory_collection_to_dict(snap.memory)
         else:
-            memory = {"total": 0, "used": 0, "available": 0, "free": 0, "cached": 0, "percent": 0.0}
+            memory = {
+                "total": 0,
+                "used": 0,
+                "available": 0,
+                "free": 0,
+                "cached": 0,
+                "percent": 0.0,
+            }
 
         disk: dict
         if self._check(Permission.DISK_READ) and not isinstance(snap.disk, u):
@@ -317,6 +379,11 @@ class AsyncBridge:
             battery = {"percent": 0.0, "power_plugged": None, "seconds_left": None}
 
         return {
-            "cpu": cpu, "memory": memory, "disk": disk, "network": network,
-            "processes": processes, "sensors": sensors, "battery": battery,
+            "cpu": cpu,
+            "memory": memory,
+            "disk": disk,
+            "network": network,
+            "processes": processes,
+            "sensors": sensors,
+            "battery": battery,
         }

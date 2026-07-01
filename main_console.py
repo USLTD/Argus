@@ -69,7 +69,10 @@ def main() -> None:
         "--ticks", type=int, default=10, help="Number of sampling ticks (0=infinite)"
     )
     parser.add_argument(
-        "--interval", type=float, default=None, help="Seconds between ticks (default: from config.poll_interval_ms)",
+        "--interval",
+        type=float,
+        default=None,
+        help="Seconds between ticks (default: from config.poll_interval_ms)",
     )
     parser.add_argument(
         "--verbose",
@@ -89,7 +92,9 @@ def main() -> None:
     print("=== Booting Application ===\n")
 
     config = ArgusConfig()
-    interval = args.interval if args.interval is not None else config.poll_interval_ms / 1000
+    interval = (
+        args.interval if args.interval is not None else config.poll_interval_ms / 1000
+    )
     db = DatabaseManager()
     engine = BackendEngine(
         on_tick_callback=lambda snap: db.write_snapshot(
@@ -125,12 +130,12 @@ def main() -> None:
     _report_scripts(engine.loader.active_scripts)
 
     print("\n  Config:")
-    print(f"    poll_interval_ms={config.poll_interval_ms}ms (using --interval={interval}s)")
+    print(
+        f"    poll_interval_ms={config.poll_interval_ms}ms (using --interval={interval}s)"
+    )
     print(f"    driver_override={config.driver_override}")
 
-    print(
-        f"\n=== Event Loop Started ({args.ticks} ticks, {interval}s interval) ===\n"
-    )
+    print(f"\n=== Event Loop Started ({args.ticks} ticks, {interval}s interval) ===\n")
 
     tick_count = 0
     try:

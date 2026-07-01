@@ -6,16 +6,13 @@ from PyQt6.QtCore import QTimer
 
 
 class SystemClock(QLabel):
-
     def __init__(self):
 
         super().__init__()
 
         timer = QTimer(self)
 
-        timer.timeout.connect(
-            self.update_time
-        )
+        timer.timeout.connect(self.update_time)
 
         timer.start(1000)
 
@@ -23,8 +20,4 @@ class SystemClock(QLabel):
 
     def update_time(self):
 
-        self.setText(
-            datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-        )
+        self.setText(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))

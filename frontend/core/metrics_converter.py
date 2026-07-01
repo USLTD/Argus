@@ -3,16 +3,24 @@
 from __future__ import annotations
 
 from backend.interfaces.caps import (
-    BatteryMetric, CPUMetric, GPUMetric, MemoryMetric,
-    MetricsCollection, NetworkMetric, ProcessMetric,
-    SensorMetric, StorageMetric, SystemMetrics, UserMetric,
+    BatteryMetric,
+    CPUMetric,
+    GPUMetric,
+    MemoryMetric,
+    MetricsCollection,
+    NetworkMetric,
+    ProcessMetric,
+    SensorMetric,
+    StorageMetric,
+    SystemMetrics,
+    UserMetric,
 )
 from backend.interfaces.sentinels import TickSnapshot, Unavailable
 
 
 def snapshot_to_system_metrics(snapshot: TickSnapshot) -> SystemMetrics:
     """Convert a TickSnapshot to a SystemMetrics for DB storage.
-    
+
     Unavailable fields become empty MetricsCollections.
     """
     cpu_val: MetricsCollection[CPUMetric] | None = (

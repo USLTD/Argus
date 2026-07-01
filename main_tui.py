@@ -26,7 +26,18 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, ProgressBar, Select, Static, Switch
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ProgressBar,
+    Select,
+    Static,
+    Switch,
+)
 
 from backend.storage.config import SUBSYSTEM_NAMES
 
@@ -339,9 +350,7 @@ class OverviewScreen(Screen):
         sent = net.get("bytes_sent", 0)
         recv = net.get("bytes_recv", 0)
         self.query_one("#ov-network", Static).update(
-            "[b]Network[/b]\n"
-            f"  Sent: {_fmt_bytes(sent)}    "
-            f"Recv: {_fmt_bytes(recv)}"
+            f"[b]Network[/b]\n  Sent: {_fmt_bytes(sent)}    Recv: {_fmt_bytes(recv)}"
         )
 
         # Battery
@@ -415,7 +424,12 @@ class CPUScreen(Screen):
             for i in range(len(per_core)):
                 row = Horizontal(
                     Static(f"Core {i}:  "),
-                    ProgressBar(total=100, id=f"core-bar-{i}", classes="core-bar", show_percentage=False),
+                    ProgressBar(
+                        total=100,
+                        id=f"core-bar-{i}",
+                        classes="core-bar",
+                        show_percentage=False,
+                    ),
                 )
                 container.mount(row)
 
@@ -479,7 +493,9 @@ class MemoryScreen(Screen):
 
         self.query_one("#mem-bar", ProgressBar).progress = pct
         self.query_one("#mem-total", Static).update(f"  Total:     {_fmt_bytes(total)}")
-        self.query_one("#mem-used", Static).update(f"  Used:      {_fmt_bytes(used)}  ({pct:.1f}%)")
+        self.query_one("#mem-used", Static).update(
+            f"  Used:      {_fmt_bytes(used)}  ({pct:.1f}%)"
+        )
         self.query_one("#mem-free", Static).update(f"  Free:      {_fmt_bytes(free)}")
         self.query_one("#mem-avail", Static).update(f"  Available: {_fmt_bytes(avail)}")
 
@@ -689,7 +705,7 @@ class ProcessesScreen(Screen):
         try:
             row = table.get_row_at(idx)
             pid = int(row[0])
-        except (ValueError, IndexError):
+        except ValueError, IndexError:
             return
 
         if event.button.id == "btn-terminate":
@@ -706,7 +722,7 @@ class ProcessesScreen(Screen):
             try:
                 pid = int(table.get_row_at(table.cursor_row)[0])
                 await self.app.bridge.terminate_process(pid)  # type: ignore[union-attr]
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
 
     async def action_kill(self) -> None:
@@ -715,7 +731,7 @@ class ProcessesScreen(Screen):
             try:
                 pid = int(table.get_row_at(table.cursor_row)[0])
                 await self.app.bridge.kill_process(pid)  # type: ignore[union-attr]
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
 
 
@@ -796,7 +812,9 @@ class SystemScreen(Screen):
         memory = info.get("memory", {}) if isinstance(info, dict) else {}
         total_ram_raw = memory.get("total_ram_bytes", 0)
         total_ram = total_ram_raw if isinstance(total_ram_raw, (int, float)) else 0
-        self.query_one("#sys-ram", Static).update(f"  RAM:       {_fmt_bytes(total_ram)}")
+        self.query_one("#sys-ram", Static).update(
+            f"  RAM:       {_fmt_bytes(total_ram)}"
+        )
 
         self.query_one("#sys-python", Static).update(
             f"  Python:    {sys.version.split()[0]}"
@@ -836,9 +854,13 @@ class SettingsScreen(Screen):
                 # ── Polling section ──
                 yield Static("[bold]Polling[/bold]", classes="setting-section")
                 yield Label("Poll interval (ms):")
-                yield Input(id="cfg-poll_interval_ms", type="integer", placeholder="1000")
+                yield Input(
+                    id="cfg-poll_interval_ms", type="integer", placeholder="1000"
+                )
                 yield Label("Process tick interval:")
-                yield Input(id="cfg-process_tick_interval", type="integer", placeholder="5")
+                yield Input(
+                    id="cfg-process_tick_interval", type="integer", placeholder="5"
+                )
                 yield Label("Driver override (empty = auto):")
                 yield Input(id="cfg-driver_override", placeholder="")
 
@@ -847,11 +869,17 @@ class SettingsScreen(Screen):
                 yield Label("Script batch size:")
                 yield Input(id="cfg-script_batch_size", type="integer", placeholder="4")
                 yield Label("Script timeout (ms):")
-                yield Input(id="cfg-script_timeout_ms", type="integer", placeholder="5000")
+                yield Input(
+                    id="cfg-script_timeout_ms", type="integer", placeholder="5000"
+                )
                 yield Label("Execution mode:")
                 yield Select(
                     id="cfg-script_execution_mode",
-                    options=[("nonblocking", "nonblocking"), ("blocking", "blocking"), ("mixed", "mixed")],
+                    options=[
+                        ("nonblocking", "nonblocking"),
+                        ("blocking", "blocking"),
+                        ("mixed", "mixed"),
+                    ],
                     value="nonblocking",
                 )
                 yield Label("Compat default:")
@@ -868,13 +896,19 @@ class SettingsScreen(Screen):
                     with Horizontal():
                         yield Switch(id=f"cfg-subsystem_enabled-{sub_name}", value=True)
                         yield Label(f" {sub_name}")
-                        yield Input(id=f"cfg-subsystem_intervals-{sub_name}", type="integer", placeholder="1000")
+                        yield Input(
+                            id=f"cfg-subsystem_intervals-{sub_name}",
+                            type="integer",
+                            placeholder="1000",
+                        )
                         yield Label("ms")
 
                 # ── Buttons ──
                 with Horizontal():
                     yield Button("Submit", id="btn-settings-submit", variant="primary")
-                    yield Button("Reset to defaults", id="btn-settings-reset", variant="default")
+                    yield Button(
+                        "Reset to defaults", id="btn-settings-reset", variant="default"
+                    )
 
     def on_mount(self) -> None:
         self._populate()
@@ -1016,7 +1050,10 @@ class AboutScreen(Screen):
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Static("")
-            yield Static("            [bold #e94560]Argus TUI[/bold #e94560]", classes="section-title")
+            yield Static(
+                "            [bold #e94560]Argus TUI[/bold #e94560]",
+                classes="section-title",
+            )
             yield Static("")
             yield Static("            Powerful process manager for the terminal.")
             yield Static("")
@@ -1079,10 +1116,18 @@ class DriverScreen(Screen):
 
         # Show all candidates
         candidates_div = self.query_one("#drv-candidates", Static)
-        active_name = caps.driver.name if (driver and (caps := driver.get_capabilities())) else None
+        active_name = (
+            caps.driver.name
+            if (driver and (caps := driver.get_capabilities()))
+            else None
+        )
         lines = ["  Candidates:"]
         for c in engine.list_drivers():
-            tag = "[green]ACTIVE[/green]" if c.get("name") == active_name else f"score={c['score']}"
+            tag = (
+                "[green]ACTIVE[/green]"
+                if c.get("name") == active_name
+                else f"score={c['score']}"
+            )
             lines.append(f"    {c['name']:20s} [{tag}]")
         candidates_div.update("\n".join(lines))
 

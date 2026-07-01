@@ -61,9 +61,7 @@ class TestInjectorRegistry:
 
     def test_event_injector_permission_gating(self) -> None:
         reset_injectors()
-        ro_inj = EventInjector(
-            "perm.a", ["on_tick"], permission=Permission.SCRIPT_READ
-        )
+        ro_inj = EventInjector("perm.a", ["on_tick"], permission=Permission.SCRIPT_READ)
         sr_inj = EventInjector("perm.b", ["on_tick"], permission=Permission.SYSTEM_READ)
         assert ro_inj.permission == Permission.SCRIPT_READ
         assert sr_inj.permission == Permission.SYSTEM_READ
