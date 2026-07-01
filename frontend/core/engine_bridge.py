@@ -139,8 +139,7 @@ class EngineBridge(QObject):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._state_cache: dict[str, object] | None = None
-        self._process_tick_count: int = 0
-        self._process_cache: list[ProcessEntryDict] = []
+        self._last_network_io: NetworkIODict | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -293,7 +292,7 @@ class EngineBridge(QObject):
         return DiskUsageDict(total=0, used=0, free=0, percent=0.0)
 
     def get_network_io(self) -> NetworkIODict:
-        """Aggregate bytes sent / received across all interfaces."""
+        """Network I/O rates (bytes/sec delta)."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.NETWORK_READ):
             return NetworkIODict(bytes_sent=0, bytes_recv=0)
@@ -306,41 +305,47 @@ class EngineBridge(QObject):
             if isinstance(iface, dict):
                 total_sent += iface.get("bytes_sent", 0)
                 total_recv += iface.get("bytes_recv", 0)
-        return NetworkIODict(bytes_sent=total_sent, bytes_recv=total_recv)
+        current = NetworkIODict(bytes_sent=total_sent, bytes_recv=total_recv)
+        if self._last_network_io is not None:
+            delta = NetworkIODict(
+                bytes_sent=current["bytes_sent"] - self._last_network_io["bytes_sent"],
+                bytes_recv=current["bytes_recv"] - self._last_network_io["bytes_recv"],
+            )
+            self._last_network_io = current
+            return delta
+        self._last_network_io = current
+        return current
 
     def get_process_list(self) -> list[ProcessEntryDict]:
-        """Snapshot of running processes (limited fields).
-
-        Collected fresh every 5th call for performance; cached in between.
-        """
+        """Return the current process list from the engine state."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.PROCESSES_READ):
             return []
-        self._process_tick_count += 1
-        if self._process_tick_count % 5 != 1:
-            return list(self._process_cache)
         state = self._state
         proc_container = state.get("processes", {})
-        proc_list = proc_container.get("metrics", []) if isinstance(proc_container, dict) else []
+        proc_list: list[dict[str, object]] = []
+        if isinstance(proc_container, dict):
+            proc_list = proc_container.get("metrics", [])
+        elif isinstance(proc_container, list):
+            proc_list = proc_container
         result: list[ProcessEntryDict] = []
-        for proc in proc_list:
-            if isinstance(proc, dict):
+        for p in proc_list:
+            if isinstance(p, dict):
                 result.append(
                     ProcessEntryDict(
-                        pid=proc.get("pid", 0),  # type: ignore[arg-type]
-                        name=proc.get("name", ""),  # type: ignore[arg-type]
-                        cpu_percent=proc.get("cpu_percent", 0.0),  # type: ignore[arg-type]
-                        memory_info=proc.get("memory_rss", 0),  # type: ignore[arg-type]
-                        status=proc.get("status", ""),  # type: ignore[arg-type]
-                        num_threads=proc.get("num_threads", 0),  # type: ignore[arg-type]
-                        username=proc.get("username"),  # type: ignore[arg-type]
-                        ppid=proc.get("ppid"),  # type: ignore[arg-type]
-                        create_time=proc.get("create_time"),  # type: ignore[arg-type]
-                        exe=proc.get("exe"),  # type: ignore[arg-type]
+                        pid=p.get("pid", 0),  # type: ignore[arg-type]
+                        name=p.get("name", ""),  # type: ignore[arg-type]
+                        cpu_percent=p.get("cpu_percent", 0.0),  # type: ignore[arg-type]
+                        memory_info=p.get("memory_rss", 0),  # type: ignore[arg-type]
+                        status=p.get("status", ""),  # type: ignore[arg-type]
+                        num_threads=p.get("num_threads", 0),  # type: ignore[arg-type]
+                        username=p.get("username"),  # type: ignore[arg-type]
+                        ppid=p.get("ppid"),  # type: ignore[arg-type]
+                        create_time=p.get("create_time"),  # type: ignore[arg-type]
+                        exe=p.get("exe"),  # type: ignore[arg-type]
                     )
                 )
-        self._process_cache = result
-        return list(result)
+        return result
 
     def get_sensors(self) -> dict[str, list[float]]:
         """Temperatures keyed by sensor name → list of values."""
@@ -399,6 +404,18 @@ class EngineBridge(QObject):
         from backend.interfaces.enums import Permission
         if not self._check(Permission.SYSTEM_READ):
             return 0.0
+        from backend.interfaces.caps import UnavailableInfo
+        driver = self._driver
+        if driver is not None:
+            try:
+                static = driver.get_static_info()  # type: ignore[union-attr, reportAttributeAccessIssue]
+                if static is not None:
+                    bt = static.system.boot_time
+                    if not isinstance(bt, UnavailableInfo):
+                        import datetime
+                        return datetime.datetime.fromisoformat(str(bt)).timestamp()
+            except Exception:
+                pass
         return 0.0
 
     def get_disk_partitions(self) -> list[dict[str, str]]:
@@ -419,10 +436,23 @@ class EngineBridge(QObject):
         ]
 
     def get_network_interfaces(self) -> dict[str, object]:
-        """Network interface → addresses (not yet provided by engine)."""
+        """Network interfaces from static info (or empty dict when unavailable)."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.NETWORK_READ):
             return {}
+        try:
+            static = self.get_static_info()
+            if static:
+                raw = static.get("network", {}).get("interfaces", [])
+                if raw:
+                    result: dict[str, object] = {}
+                    for iface in raw:
+                        name = iface.get("name", "")
+                        if name:
+                            result[name] = iface
+                    return result
+        except Exception:
+            pass
         return {}
 
     def get_battery(self) -> BatteryDict:

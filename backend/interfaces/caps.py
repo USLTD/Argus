@@ -243,6 +243,22 @@ class SystemInfo(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class NetworkInterfaceInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: StaticField[str] = UnavailableInfo(reason="unsupported")
+    family: StaticField[str] = UnavailableInfo(reason="unsupported")
+    address: StaticField[str] = UnavailableInfo(reason="unsupported")
+    netmask: StaticField[str | None] = None
+    broadcast: StaticField[str | None] = None
+
+
+class NetworkInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    interfaces: list[NetworkInterfaceInfo] = []
+
+
 class StaticSystemInfo(BaseModel):
     cpu: CpuInfo
     gpu: GpuInfo
@@ -250,6 +266,7 @@ class StaticSystemInfo(BaseModel):
     os: OsInfo
     memory: MemoryInfo
     system: SystemInfo
+    network: NetworkInfo = NetworkInfo()
 
 
 def dump_static_info(info: StaticSystemInfo) -> dict:

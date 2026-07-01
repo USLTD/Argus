@@ -24,6 +24,8 @@ from backend.interfaces.caps import (
     MetricsCollection,
     MotherboardInfo,
     NetworkCapabilities,
+    NetworkInfo,
+    NetworkInterfaceInfo,
     NetworkMetric,
     OsInfo,
     ProcessCapabilities,
@@ -315,6 +317,29 @@ class WindowsDriver(BaseDriver):
         except Exception:
             pass
 
+        # Network interfaces
+        network_interfaces: list[NetworkInterfaceInfo] = []
+        try:
+            _AF_MAP: dict[int, str] = {}
+            for _name in ("AF_INET", "AF_INET6", "AF_PACKET", "AF_LINK", "AF_UNIX"):
+                _val = getattr(socket, _name, None)
+                if _val is not None:
+                    _AF_MAP[_val] = _name
+            for iface_name, addrs in psutil.net_if_addrs().items():
+                for addr in addrs:
+                    family_str = _AF_MAP.get(addr.family, f"AF_UNKNOWN({addr.family})")
+                    network_interfaces.append(
+                        NetworkInterfaceInfo(
+                            name=iface_name,
+                            family=family_str,
+                            address=addr.address,
+                            netmask=addr.netmask,
+                            broadcast=addr.broadcast,
+                        )
+                    )
+        except Exception:
+            pass
+
         return StaticSystemInfo(
             cpu=CpuInfo(
                 name=cpu_brand,
@@ -335,6 +360,7 @@ class WindowsDriver(BaseDriver):
             os=OsInfo(name=os_name, version=os_version, architecture=arch),
             memory=MemoryInfo(total_ram_bytes=total_ram),
             system=SystemInfo(hostname=hostname, username=username, python_version=py_ver, boot_time=boot_time),
+            network=NetworkInfo(interfaces=network_interfaces),
         )
 
     @override
