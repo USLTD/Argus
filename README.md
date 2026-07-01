@@ -6,6 +6,7 @@
 
 ```bash
 pip install -e .
+# or via uv: uv sync
 python main_tui.py    # launch Textual TUI
 python main_gui.py    # launch PyQt6 GUI (requires PyQt6)
 ```
@@ -30,15 +31,15 @@ Argus follows a clean three-layer architecture: drivers collect raw system data,
             ┌───────────────────┼───────────────────┐
             ▼                   ▼                   ▼
   ┌──────────────────┐ ┌────────────────┐ ┌──────────────────┐
-  │   SyncBridge      │ │  AsyncBridge   │ │  EngineBridge    │
-  │ sync, no deps     │ │ async, asyncio │ │ QTimer, pyqtSigs │
-  │ used by Textual   │ │ future web/CLI │ │ used by PyQt6    │
+  │   AsyncBridge     │ │  SyncBridge   │ │  EngineBridge    │
+  │ async, asyncio    │ │ sync, no deps │ │ QTimer, pyqtSigs │
+  │ used by Textual   │ │ CLI/scripts   │ │ used by PyQt6    │
   └────────┬─────────┘ └───────┬────────┘ └────────┬─────────┘
            │                   │                    │
            ▼                   ▼                    ▼
   ┌────────────────┐  ┌──────────────┐  ┌──────────────────────┐
-  │   main_tui.py  │  │  Future      │  │    main_gui.py       │
-  │   (Textual)    │  │  web/CLI     │  │    frontend/pages/   │
+  │   main_tui.py  │  │  CLI/scripts │  │    main_gui.py       │
+  │   (Textual)    │  │              │  │    frontend/pages/   │
   └────────────────┘  └──────────────┘  └──────────────────────┘
 ```
 
@@ -53,7 +54,7 @@ The hook system (in `contexts.py`) lets scripts and plugins intercept lifecycle 
 
 ## Features
 
-- **8 TUI screens**: Overview, CPU, Memory, Disk, Network, Processes, System, About -- switch with `1`-`8`
+- **9 TUI screens**: Overview, CPU, Memory, Disk, Network, Processes, System, About, Settings -- switch with `1`-`9`
 - **PyQt6 GUI**: Full graphical interface with real-time charts, process management, and detail pages
 - **Cross-platform**: Linux (`generic_linux.py`) and Windows (`generic_windows.py`) drivers ship built-in
 - **Plugin driver architecture**: Drop-in drivers with auto-discovery and compatibility scoring
@@ -62,16 +63,24 @@ The hook system (in `contexts.py`) lets scripts and plugins intercept lifecycle 
 - **Hook system**: Lifecycle hooks, tick hooks, and signal hooks for extensibility
 - **Scripting**: Python and Lua scripts (`scripts/`) that run on driver ticks -- CPU logging, disk watchdogs, sensor dashboards, network monitors, and more
 - **Sandboxed Lua**: Lua scripts run via `lupa` with an isolated sandbox environment
-- **Three bridge APIs**: `SyncBridge` (synchronous, used by TUI), `AsyncBridge` (asyncio), `EngineBridge` (PyQt6 `QObject` with signals) -- all exposing the same `get_*()` interface
+- **Three bridge APIs**: `SyncBridge` (synchronous, used by CLI/scripts), `AsyncBridge` (asyncio, used by TUI), `EngineBridge` (PyQt6 `QObject` with signals) -- all exposing the same `get_*()` interface
 
 ## Requirements
 
 - Python 3.14+
 - [Textual](https://github.com/Textualize/textual) >= 8.2.7 (TUI)
-- [psutil](https://github.com/giampaolo/psutil) >= 7.2.2
 - [pydantic](https://github.com/pydantic/pydantic) >= 2.14
 - [lupa](https://github.com/scoder/lupa) >= 2.8 (Lua scripting runtime)
-- PyQt6 >= 6.8.0 + pyqtgraph >= 0.13.7 (GUI, optional -- install via `pip install -e .[gui]`)
+- PyQt6 >= 6.8.0 + pyqtgraph >= 0.13.7 (GUI, optional)
+
+Managed via `uv` with dependency groups:
+- `dev` -- test and development tooling
+- `cli` -- Rich library for console output
+- `tui` -- Textual library (TUI)
+- `gui` -- PyQt6 + pyqtgraph (GUI, optional)
+- `driver-win` -- Windows driver extras (WMI, pywin32)
+- `driver-linux` -- Linux driver extras (GPUtil)
+- `drivers-common` -- psutil (shared by all drivers)
 
 ## Project Structure
 
@@ -80,8 +89,8 @@ argus/
 ├── backend/
 │   ├── bridges/           # Data-access layers (converters, SyncBridge, AsyncBridge)
 │   │   ├── converters.py  # MetricsCollection[T] -> flat dicts
-│   │   ├── sync_bridge.py # Synchronous driver bridge (used by TUI)
-│   │   └── async_bridge.py# Async driver bridge (for asyncio consumers)
+│   │   ├── sync_bridge.py # Synchronous driver bridge (used by CLI/scripts)
+│   │   └── async_bridge.py# Async driver bridge (used by TUI)
 │   ├── core/              # Engine, driver loader, scripting runtime, sandbox
 │   │   ├── engine.py      # BackendEngine -- tick orchestrator
 │   │   ├── loader.py      # DiscoveryLoader -- driver discovery & scoring
@@ -137,8 +146,9 @@ argus/
 | `6` | Processes| DataTable with search, terminate, kill |
 | `7` | System   | Static host/platform/CPU/RAM info |
 | `8` | About    | Version, keybindings, credits |
+| `9` | Settings | Live config editing (theme, polling, scripting parameters) |
 
-Navigation: `1`-`8` to switch screens, `q` / `Ctrl+C` to quit, `r` to force-refresh.
+Navigation: `1`-`9` to switch screens, `q` / `Ctrl+C` to quit, `r` to force-refresh.
 
 ## Scripting
 
@@ -160,9 +170,10 @@ Implement `BaseDriver` from `backend/interfaces/plugins.py`:
 ```python
 from backend.interfaces.plugins import BaseDriver
 from backend.interfaces.caps import CPUMetric, MetricsCollection, StaticSystemInfo
+from backend.interfaces.contexts import DriverContext
 
 class MyDriver(BaseDriver):
-    def tick_cpu(self) -> MetricsCollection[CPUMetric]:
+    def tick_cpu(self, ctx: DriverContext) -> MetricsCollection[CPUMetric]:
         # collect CPU data...
         ...
 

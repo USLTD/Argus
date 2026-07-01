@@ -2,7 +2,7 @@ from typing import final, TypeVar, ParamSpec, Callable, Any
 from backend.core.driver_proxy import DriverProxy as _DriverProxy
 from backend.interfaces.caps import SystemMetrics
 from backend.storage.config import ArgusConfig as _ArgusConfig
-from backend.storage.database import DatabaseManager as _DatabaseManager
+from frontend.core.database import DatabaseManager as _DatabaseManager
 
 P = ParamSpec("P")
 R = TypeVar("R")

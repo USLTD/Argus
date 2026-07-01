@@ -9,13 +9,13 @@ Argus is a modular system monitoring application with a clear separation between
 │                      Frontend Layer                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
 │  │ main_tui.py  │  │main_console  │  │   main_gui.py    │   │
-│  │  (Textual)   │  │  (future)    │  │    (PyQt6)       │   │
+│  │  (Textual)   │  │  (rich tables)│  │    (PyQt6)       │   │
 │  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘   │
 │         │                 │                    │             │
 │         ▼                 ▼                    ▼             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ SyncBridge   │  │ AsyncBridge  │  │  EngineBridge    │   │
-│  │  (sync)      │  │  (asyncio)   │  │ (QTimer+pyqtSig) │   │
+│  │ AsyncBridge  │  │ SyncBridge   │  │  EngineBridge    │   │
+│  │  (asyncio)   │  │  (sync)      │  │ (QTimer+pyqtSig) │   │
 │  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘   │
 │         │                 │                    │             │
 └─────────┼─────────────────┼────────────────────┼─────────────┘
@@ -47,14 +47,14 @@ Argus is a modular system monitoring application with a clear separation between
 
 ```
 Argus/
-├── main_tui.py             # Textual TUI entry point (synchronous)
+├── main_tui.py             # Textual TUI entry point (async)
 ├── main_gui.py             # PyQt6 GUI entry point
-├── main_console.py         # Future CLI / console entry point
+├── main_console.py         # CLI demo with rich tables
 ├── backend/
 │   ├── bridges/
 │   │   ├── converters.py   # MetricsCollection[T] → flat dicts
-│   │   ├── sync_bridge.py  # Synchronous bridge (Textual)
-│   │   └── async_bridge.py # Asyncio bridge (future consumers)
+│   │   ├── sync_bridge.py  # Synchronous bridge (CLI/scripts)
+│   │   └── async_bridge.py # Asyncio bridge (Textual TUI)
 │   ├── core/
 │   │   ├── engine.py       # BackendEngine orchestrator
 │   │   └── loader.py       # DiscoveryLoader (driver discovery)
@@ -67,7 +67,7 @@ Argus/
 │   │   └── enums.py        # Permission, ConfidenceScore enums
 │   └── storage/
 │       ├── config.py       # ArgusConfig
-│       └── database.py     # DatabaseManager
+│       └── database.py     # DatabaseManager (deprecated, backend removed)
 ├── frontend/
 │   ├── core/
 │   │   └── engine_bridge.py # PyQt6 EngineBridge (QObject)
@@ -77,8 +77,10 @@ Argus/
 │   ├── themes/             # Theme definitions
 │   └── assets/             # Icons, resources
 ├── drivers/
-│   ├── generic_linux.py    # Linux driver
-│   └── generic_windows.py  # Windows driver
+│   ├── builtin/
+│   │   ├── generic_linux.py    # Linux driver
+│   │   └── generic_windows.py  # Windows driver
+│   └── custom/             # User-provided drivers
 ├── docs/
 │   └── architecture.md     # This file
 └── tests/                  # Test suite
@@ -108,6 +110,7 @@ def tick(self, ctx: DriverContext) -> TickSnapshot:
         gpu=self.tick_gpu(ctx),
         sensors=self.tick_sensors(ctx),
         battery=self.tick_battery(ctx),
+        users=self.tick_users(ctx),
     )
 ```
 
@@ -128,6 +131,7 @@ class TickSnapshot:
     gpu: MetricsCollection[GPUMetric] | Unavailable
     sensors: MetricsCollection[SensorMetric] | Unavailable
     battery: MetricsCollection[BatteryMetric] | Unavailable
+    users: MetricsCollection[UserMetric] | Unavailable
 ```
 
 Every field is typed as a union with `Unavailable`. The frontend never sees raw exceptions. It always gets either data or a sentinel.
@@ -167,8 +171,8 @@ Three bridge classes wrap the same converter functions but offer different execu
 
 | Bridge | Paradigm | Used By | Polling |
 |--------|----------|---------|---------|
-| `SyncBridge` | Synchronous | Textual TUI | Manual `tick_all()` + `get_*()` calls |
-| `AsyncBridge` | Asyncio (`run_in_executor`) | Future async apps | `start_polling(interval)` task |
+| `SyncBridge` | Synchronous | CLI tools, scripts | Manual `tick_all()` + `get_*()` calls |
+| `AsyncBridge` | Asyncio (`run_in_executor`) | Textual TUI | `start_polling(interval)` task |
 | `EngineBridge` | QObject + QTimer | PyQt6 GUI | `start_polling(interval_ms)` timer |
 
 All three expose the same `get_*()` method family and delegate to the same converter functions.
@@ -304,17 +308,16 @@ Key behaviors:
 - `get_all()` calls `tick_all()` then assembles every subsystem into one dict. This is the primary method for the TUI's 2-second refresh cycle.
 - `terminate_process(pid)` / `kill_process(pid)` delegate to `driver.manage_process()`.
 
-The TUI creates a `SyncBridge` in `_create_bridge()`:
+The TUI creates an `AsyncBridge` in `_create_bridge()`:
 
 ```python
-def _create_bridge():
-    from backend.core.engine import BackendEngine
-    from backend.bridges.sync_bridge import SyncBridge
-    engine = BackendEngine()
+def _create_bridge(engine):
+    from backend.bridges.async_bridge import AsyncBridge
+
     driver = engine.loader.active_driver
     if driver is None:
         raise RuntimeError("No driver loaded")
-    return SyncBridge(driver=driver)
+    return AsyncBridge(driver=driver)
 ```
 
 ### AsyncBridge
@@ -432,7 +435,7 @@ def on_state_updated(ctx: BridgeContext) -> None:
 
 ### Textual TUI (main_tui.py)
 
-A single-file application (~880 lines) that provides 8 screens:
+A single-file application (~880 lines) that provides 9 screens:
 
 | Key | Screen    | Content |
 |-----|-----------|---------|
@@ -444,13 +447,16 @@ A single-file application (~880 lines) that provides 8 screens:
 | 6   | Processes | DataTable with search, terminate, kill actions |
 | 7   | System    | Static host / platform / CPU / RAM info |
 | 8   | About     | Version, keybindings, credits |
+| 9   | Settings  | Live config editing (theme, polling, scripting) |
 
 Architecture:
-- Uses `SyncBridge` directly. Every refresh calls `bridge.get_all()` synchronously.
+- Uses `AsyncBridge` directly. Every screen has an async `_poll()` method that calls `await self.app.bridge.get_all()`.
 - Auto-refresh via `set_interval(2.0)` (every 2 seconds). Manual refresh via `r` key.
-- Navigation with keys `1`-`8`, quit with `q`.
-- Process management: selecting a row and pressing `t` (terminate) or `k` (kill) calls `bridge.terminate_process()` or `bridge.kill_process()`.
-- No async code, no PyQt6 dependency. Pure Textual.
+- Navigation with keys `1`-`9`, quit with `q`.
+- Process management: selecting a row and pressing `t` (terminate) or `k` (kill) calls `await bridge.terminate_process()` or `await bridge.kill_process()`.
+- Pure Textual, no PyQt6 dependency.
+
+Settings screen (key `9`): Shows all 9 config fields from `engine.get_config()`. Each field is a labeled row (e.g., `poll_interval_ms: 1000`). Pressing `Enter` on a row opens an inline input for editing. Validated through `engine.set_config()` with type checking and side-effect handling.
 
 ### PyQt6 GUI (main_gui.py + frontend/)
 
@@ -473,9 +479,9 @@ Architecture:
 
 | File          | Framework | Bridge       | Use Case |
 |---------------|-----------|--------------|----------|
-| `main_tui.py` | Textual   | SyncBridge   | Terminal system monitor |
+| `main_tui.py` | Textual   | AsyncBridge  | Terminal system monitor |
 | `main_gui.py` | PyQt6     | EngineBridge | Desktop GUI with charts |
-| `main_console.py` | None | (future) | CLI tools, scripts |
+| `main_console.py` | None | — | CLI tools, scripts (rich tables) |
 
 ## Design Decisions
 

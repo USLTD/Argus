@@ -26,6 +26,7 @@ from backend.interfaces.contexts import (
     GpuTickData,
     BatteryTickData,
     SensorTickData,
+    UserTickData,
 )
 from backend.interfaces.sentinels import Unavailable
 from backend.interfaces.enums import Permission as _Permission
@@ -113,6 +114,13 @@ class _SensorEvents:
     """Called on each tick; ``ctx.data`` is a list of sensor dicts, or ``None``."""
 
 @final
+class _UsersEvents:
+    """``argus.events.users`` — User session events."""
+
+    on_tick: Callable[[ScriptContext[list[UserTickData] | None]], None] | Hook
+    """Called on each tick; ``ctx.data`` is a list of user dicts, or ``None``."""
+
+@final
 class _Events:
     """``argus.events`` — subsystem event callbacks."""
 
@@ -125,6 +133,7 @@ class _Events:
     gpu: _GpuEvents
     battery: _BatteryEvents
     sensor: _SensorEvents
+    users: _UsersEvents
 
 
 # ---------------------------------------------------------------------------

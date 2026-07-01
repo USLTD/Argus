@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         ProcessMetric,
         SensorMetric,
         StorageMetric,
+        UserMetric,
     )
 
 
@@ -60,3 +61,4 @@ class TickSnapshot:
     gpu: MetricsCollection[GPUMetric] | Unavailable
     sensors: MetricsCollection[SensorMetric] | Unavailable
     battery: MetricsCollection[BatteryMetric] | Unavailable
+    users: MetricsCollection[UserMetric] | Unavailable

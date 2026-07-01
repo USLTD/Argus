@@ -33,6 +33,7 @@ from backend.core.argus_runtime import (
     create_argus_namespace,
     extract_registered_callbacks,
 )
+from backend.interfaces.enums import ScriptExecutionMode
 from backend.interfaces.plugins import BaseDriver, BaseUserScript, PluginMeta
 
 
@@ -44,15 +45,35 @@ class PythonScriptWrapper(BaseUserScript):
     and ``pop_output()`` methods consumable by the engine's event loop.
     """
 
-    def __init__(self, file_path: Path, meta: PluginMeta) -> None:
+    def __init__(
+        self,
+        file_path: Path,
+        meta: PluginMeta,
+        execution_mode: ScriptExecutionMode = ScriptExecutionMode.NONBLOCKING,
+    ) -> None:
         self.file_path = file_path
         self.METADATA = meta
+        self.execution_mode = execution_mode
         self._driver: BaseDriver | None = None
         self._argus_mod: ModuleType | None = None
         self._lifecycle_callbacks: dict[str, Callable[..., object]] = {}
         self._event_callbacks: dict[str, Callable[..., object]] = {}
         self._cooldown_until: int = 0
         self._loaded = False
+
+    # ------------------------------------------------------------------
+    # Introspection properties
+    # ------------------------------------------------------------------
+
+    @property
+    def hooked_events(self) -> list[str]:
+        """Event paths this script has registered callbacks for."""
+        return list(self._event_callbacks.keys())
+
+    @property
+    def script_type(self) -> str:
+        """Returns ``\"python\"`` — used by list_scripts() to identify the language."""
+        return "python"
 
     # ------------------------------------------------------------------
     # Engine interface

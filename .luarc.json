@@ -1,0 +1,13 @@
+{
+  "Lua": {
+    "runtime": {
+      "version": "LuaJIT"
+    },
+    "workspace": {
+      "useGitIgnore": false,
+      "library": [
+        "scripts"
+      ]
+    }
+  }
+}

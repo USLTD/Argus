@@ -9,7 +9,7 @@ from backend.interfaces.caps import (
     MetricMetadata,
     SystemMetrics,
 )
-from backend.storage.database import DatabaseManager
+from frontend.core.database import DatabaseManager
 
 
 class TestDatabaseManager:

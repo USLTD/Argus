@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 if TYPE_CHECKING:
     from backend.interfaces.contexts import DriverContext, ScriptContext
     from backend.storage.config import ArgusConfig
-    from backend.storage.database import DatabaseManager
+    from frontend.core.database import DatabaseManager
 
 from .caps import (
     BatteryMetric,
@@ -24,8 +24,9 @@ from .caps import (
     StaticSystemInfo,
     StorageMetric,
     SystemCapabilities,
+    UserMetric,
 )
-from .enums import ConfidenceScore, Permission
+from .enums import ConfidenceScore, Permission, ScriptExecutionMode
 from .sentinels import TickSnapshot, Unavailable
 
 
@@ -51,6 +52,7 @@ class BasePlugin(ABC):
 class BaseDriver(BasePlugin, ABC):
     def __init__(self) -> None:
         self._initialized: bool = False
+        self._cached_static_info: StaticSystemInfo | None = None
         # internal setup
         self.on_load()
         self._initialized = True
@@ -113,6 +115,10 @@ class BaseDriver(BasePlugin, ABC):
         """Battery charge, status. Override to implement."""
         return Unavailable("unsupported", "Battery monitoring not implemented")
 
+    def tick_users(self, ctx: DriverContext) -> MetricsCollection[UserMetric] | Unavailable:
+        """Logged-in users. Override to implement."""
+        return Unavailable("unsupported", "User monitoring not implemented")
+
     # ── Aggregate tick ─────────────────────────────────────────────
 
     def tick(self, ctx: DriverContext) -> TickSnapshot:
@@ -126,15 +132,33 @@ class BaseDriver(BasePlugin, ABC):
             gpu=self.tick_gpu(ctx),
             sensors=self.tick_sensors(ctx),
             battery=self.tick_battery(ctx),
+            users=self.tick_users(ctx),
         )
+
+    def _collect_static_info(self) -> StaticSystemInfo | None:
+        """Collect static system information from scratch.
+
+        Override in concrete drivers to provide motherboard, BIOS, GPU model, etc.
+        Default: returns None.
+        """
+        return None
 
     def get_static_info(self) -> StaticSystemInfo | None:
         """Return static system information, or None if unavailable.
 
-        Override to provide motherboard, BIOS, GPU model, etc.
-        Default: returns None.
+        Results are cached after the first call since system info never
+        changes during a session. Call invalidate_static_cache() to force
+        a fresh collection if needed.
         """
-        return None
+        if self._cached_static_info is not None:
+            return self._cached_static_info
+        info = self._collect_static_info()
+        self._cached_static_info = info
+        return info
+
+    def invalidate_static_cache(self) -> None:
+        """Drop the cached static info so the next call re-collects."""
+        self._cached_static_info = None
 
     @abstractmethod
     def get_capabilities(self) -> SystemCapabilities:
@@ -150,6 +174,7 @@ class BaseUserScript(BasePlugin):
 
     file_path: Path | None = None
     METADATA: PluginMeta | None = None
+    execution_mode: ScriptExecutionMode = ScriptExecutionMode.NONBLOCKING
 
     def bind_driver(self, driver: BaseDriver | None) -> None:
         """Optional: receive the active driver reference."""

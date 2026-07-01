@@ -380,6 +380,12 @@ class MinimalDriver(BaseDriver):
 DRIVER = MinimalDriver
 ```
 
+> **Dependency note**: `psutil` is part of the `drivers-common` dependency group in
+> `pyproject.toml`. Custom drivers that rely on additional libraries should declare their
+> own optional dependency groups. For example, add a `[project.optional-dependencies]`
+> section to `pyproject.toml` (e.g. `my-driver = ["some-lib"]`) and instruct users
+> to install with `pip install -e .[my-driver]` or `uv sync --group my-driver`.
+
 ## Registering a Driver
 
 ### Automatic Discovery

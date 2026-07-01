@@ -12,15 +12,20 @@ from backend.interfaces.caps import (
     BatteryCapabilities,
     BatteryMetric,
     CpuCapabilities,
+    CpuInfo,
     CPUMetric,
     DriverInfo,
     GpuCapabilities,
+    GpuInfo,
     GPUMetric,
+    MemoryInfo,
     MemoryMetric,
     MetricMetadata,
     MetricsCollection,
+    MotherboardInfo,
     NetworkCapabilities,
     NetworkMetric,
+    OsInfo,
     ProcessCapabilities,
     ProcessMetric,
     SensorCapabilities,
@@ -29,6 +34,9 @@ from backend.interfaces.caps import (
     StorageCapabilities,
     StorageMetric,
     SystemCapabilities,
+    SystemInfo,
+    UnavailableInfo,
+    UserMetric,
 )
 from backend.interfaces.contexts import DriverContext
 from backend.interfaces.sentinels import Unavailable
@@ -66,7 +74,7 @@ class WindowsDriver(BaseDriver):
     def get_capabilities(self) -> SystemCapabilities:
         return SystemCapabilities(
             cpu=CpuCapabilities(present=True, frequency=True, core_count=True),
-            gpu=GpuCapabilities(present=GPUtil is not None, detail=GPUtil is not None),
+            gpu=GpuCapabilities(present=True, detail=True),
             process=ProcessCapabilities(list=True, detail=True),
             storage=StorageCapabilities(present=True, disk_io=True),
             network=NetworkCapabilities(present=True, bandwidth=True),
@@ -210,6 +218,7 @@ class WindowsDriver(BaseDriver):
                         SensorMetric(
                             name=f"{name}_{entry.label or 'unknown'}",
                             value=entry.current,
+                            category=name,
                         )
                     )
             return MetricsCollection[SensorMetric](
@@ -239,20 +248,36 @@ class WindowsDriver(BaseDriver):
             return Unavailable("error", str(e))
 
     @override
-    def get_static_info(self) -> StaticSystemInfo:
+    def tick_users(self, ctx: DriverContext) -> MetricsCollection[UserMetric] | Unavailable:  # type: ignore[reportGeneralTypeIssues]  # basedpyright false positive: method exists on BaseDriver at runtime
+        try:
+            users = psutil.users()
+            return MetricsCollection[UserMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=[
+                    UserMetric(
+                        name=u.name,
+                        terminal=u.terminal,
+                        host=u.host,
+                        started=u.started,
+                    )
+                    for u in users
+                ],
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
+
+    @override
+    def _collect_static_info(self) -> StaticSystemInfo:
         os_name = platform.system()
         os_version = platform.version()
         hostname = socket.gethostname()
         username = getpass.getuser()
 
         cpu_brand: str = "Unknown"
-        if cpuinfo is not None:
-            try:
-                cpu_info_raw = cpuinfo.get_cpu_info()
-                cpu_brand = cpu_info_raw.get("brand_raw", "Unknown")
-            except Exception:
-                cpu_brand = platform.processor() or "Unknown"
-        else:
+        try:
+            cpu_info_raw = cpuinfo.get_cpu_info()
+            cpu_brand = cpu_info_raw.get("brand_raw", "Unknown")
+        except Exception:
             cpu_brand = platform.processor() or "Unknown"
 
         cpu_phys = psutil.cpu_count(logical=False) or 0
@@ -266,51 +291,50 @@ class WindowsDriver(BaseDriver):
         py_ver = platform.python_version()
         boot_time = datetime.fromtimestamp(psutil.boot_time()).isoformat()
 
-        gpu_name: str | None = None
-        gpu_driver: str | None = None
-        gpu_vram: int | None = None
-        motherboard_manufacturer: str | None = None
-        motherboard_model: str | None = None
-        bios_version: str | None = None
-
-        if wmi is not None:
-            try:
-                wmi_conn = wmi.WMI()
-                for video in wmi_conn.Win32_VideoController():
-                    gpu_name = video.Name
-                    gpu_driver = video.DriverVersion
-                    if video.AdapterRAM is not None:
-                        gpu_vram = int(video.AdapterRAM)
-                    break
-                for board in wmi_conn.Win32_BaseBoard():
-                    motherboard_manufacturer = board.Manufacturer
-                    motherboard_model = board.Product
-                    break
-                for bios in wmi_conn.Win32_BIOS():
-                    bios_version = bios.SMBIOSBIOSVersion
-                    break
-            except Exception:
-                pass
+        # GPU / Motherboard (may be unavailable)
+        gpu_info: dict[str, Any] = {}
+        mobo_info: dict[str, Any] = {}
+        try:
+            wmi_conn = wmi.WMI()
+            for video in wmi_conn.Win32_VideoController():
+                gpu_info = {
+                    "name": video.Name,
+                    "driver": video.DriverVersion,
+                    "vram_bytes": int(video.AdapterRAM) if video.AdapterRAM is not None else None,
+                }
+                break
+            for board in wmi_conn.Win32_BaseBoard():
+                mobo_info = {
+                    "manufacturer": board.Manufacturer,
+                    "model": board.Product,
+                }
+                break
+            for bios in wmi_conn.Win32_BIOS():
+                mobo_info["bios_version"] = bios.SMBIOSBIOSVersion
+                break
+        except Exception:
+            pass
 
         return StaticSystemInfo(
-            os_name=os_name,
-            os_version=os_version,
-            hostname=hostname,
-            username=username,
-            cpu_brand=cpu_brand,
-            cpu_physical_cores=cpu_phys,
-            cpu_logical_cores=cpu_log,
-            cpu_frequency_mhz=cpu_freq_mhz,
-            gpu_name=gpu_name,
-            gpu_driver=gpu_driver,
-            gpu_vram_bytes=gpu_vram,
-            motherboard_manufacturer=motherboard_manufacturer,
-            motherboard_model=motherboard_model,
-            bios_version=bios_version,
-            total_ram_bytes=total_ram,
-            architecture=arch,
-            python_version=py_ver,
-            boot_time=boot_time,
+            cpu=CpuInfo(
+                name=cpu_brand,
+                physical_cores=cpu_phys,
+                logical_cores=cpu_log,
+                frequency_mhz=cpu_freq_mhz,
+            ),
+            gpu=GpuInfo(
+                name=gpu_info.get("name") if "name" in gpu_info else UnavailableInfo(reason="unsupported"),
+                driver=gpu_info.get("driver") if "driver" in gpu_info else UnavailableInfo(reason="unsupported"),
+                vram_bytes=gpu_info.get("vram_bytes") if "vram_bytes" in gpu_info else UnavailableInfo(reason="unsupported"),
+            ),
+            motherboard=MotherboardInfo(
+                manufacturer=mobo_info.get("manufacturer") if "manufacturer" in mobo_info else UnavailableInfo(reason="unsupported"),
+                model=mobo_info.get("model") if "model" in mobo_info else UnavailableInfo(reason="unsupported"),
+                bios_version=mobo_info.get("bios_version") if "bios_version" in mobo_info else UnavailableInfo(reason="unsupported"),
+            ),
+            os=OsInfo(name=os_name, version=os_version, architecture=arch),
+            memory=MemoryInfo(total_ram_bytes=total_ram),
+            system=SystemInfo(hostname=hostname, username=username, python_version=py_ver, boot_time=boot_time),
         )
 
     @override

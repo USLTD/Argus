@@ -19,6 +19,7 @@ from backend.interfaces.contexts import (
     GpuTickData,
     BatteryTickData,
     SensorTickData,
+    UserTickData,
     GeneralTickData,
 )
 
@@ -64,6 +65,11 @@ BatCtx: type = ScriptContext[BatteryTickData | None]
 SensorCtx: type = ScriptContext[list[SensorTickData] | None]
 """Callback context for ``events.sensor.on_tick``.
 ``None`` when no sensors are available.
+"""
+
+UserCtx: type = ScriptContext[list[UserTickData] | None]
+"""Callback context for ``events.users.on_tick``.
+``None`` when no users are logged in.
 """
 
 # ── Broad context aliases ──────────────────────────────────

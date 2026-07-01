@@ -1,5 +1,76 @@
 ---@meta
 
+--- ── Metric types (Python model names) ─────────────────────────
+
+--- CPU metrics (aggregate).
+---@class CPUMetric
+---@field usage_percent number
+---@field physical_cores integer
+---@field logical_cores integer
+---@field per_core number[]
+---@field frequency number|nil
+
+--- Memory (RAM) metrics.
+---@class MemoryMetric
+---@field percent number
+---@field total_bytes integer
+---@field used_bytes integer
+---@field available_bytes integer
+
+--- A single disk/storage volume.
+---@class StorageMetric
+---@field mount_point string
+---@field fstype string
+---@field total_bytes integer
+---@field used_bytes integer
+---@field free_bytes integer
+---@field percent number
+
+--- A single process.
+---@class ProcessMetric
+---@field pid integer
+---@field name string
+---@field cpu_percent number
+---@field memory_rss integer|nil
+---@field status string|nil
+---@field username string|nil
+
+--- A single network interface.
+---@class NetworkMetric
+---@field bytes_sent integer
+---@field bytes_recv integer
+---@field packets_sent integer|nil
+---@field packets_recv integer|nil
+
+--- A single GPU.
+---@class GPUMetric
+---@field name string
+---@field usage_percent number
+---@field memory_total integer|nil
+---@field memory_used integer|nil
+
+--- Battery status.
+---@class BatteryMetric
+---@field percent number
+---@field power_plugged boolean|nil
+---@field seconds_left number|nil
+
+--- A single sensor reading.
+---@class SensorMetric
+---@field name string
+---@field value number
+---@field unit string
+---@field category string
+
+--- A single logged-in user.
+---@class UserMetric
+---@field name string
+---@field terminal string|nil
+---@field host string|nil
+---@field started number
+
+--- ── Script context ─────────────────────────────────────────────
+
 --- Context wrapper passed to all event and lifecycle callbacks.
 --- Access the per-hook payload via `ctx["data"]`.
 ---@class ScriptContext
@@ -8,7 +79,7 @@
 ---@field db table|nil
 ---@field driver table|nil
 
---- ── Event payload types ──────────────────────────────────────
+--- ── TickData TypedDict-style types ────────────────────────────
 
 --- Full system state snapshot delivered by `general.on_tick`.
 ---@class GeneralTickData
@@ -20,6 +91,7 @@
 ---@field network NetworkTickData[]|nil
 ---@field sensors SensorTickData[]|nil
 ---@field battery BatteryTickData|nil
+---@field users UserTickData[]|nil
 ---@field extra table
 
 --- CPU metrics for a single tick.
@@ -28,6 +100,7 @@
 ---@field per_core number[]
 ---@field physical_cores integer
 ---@field logical_cores integer
+---@field frequency number|nil
 
 --- Memory (RAM) metrics for a single tick.
 ---@class MemoryTickData
@@ -78,8 +151,16 @@
 ---@field name string
 ---@field value number
 ---@field unit string
+---@field category string
 
---- ── Event namespace classes ──────────────────────────────────
+--- A single logged-in user snapshot.
+---@class UserTickData
+---@field name string
+---@field terminal string|nil
+---@field host string|nil
+---@field started number
+
+--- ── Event namespace classes ────────────────────────────────────
 
 --- General system events (full state).
 ---@class GeneralEvents
@@ -123,7 +204,11 @@
 ---@class SensorEvents
 ---@field on_tick fun(ctx: ScriptContext)
 
---- ── Top-level namespaces ─────────────────────────────────────
+--- Users subsystem events.
+---@class UserEvents
+---@field on_tick fun(ctx: ScriptContext)
+
+--- ── Top-level namespaces ───────────────────────────────────────
 
 --- Collection of all subsystem event namespaces.
 ---@class EventsNamespace
@@ -136,6 +221,7 @@
 ---@field gpu GpuEvents
 ---@field battery BatteryEvents
 ---@field sensor SensorEvents
+---@field users UserEvents
 
 --- Script lifecycle hooks (on_load / on_unload).
 ---@class LifecycleNamespace
@@ -152,49 +238,11 @@
 ---@field format_duration fun(seconds: number): string
 ---@field kill_process fun(pid: integer): boolean
 
---- ── Root argus module ────────────────────────────────────────
+--- ── Root argus module ──────────────────────────────────────────
 
 ---@class ArgusModule
 ---@field api ApiNamespace
 ---@field lifecycle LifecycleNamespace
 ---@field events EventsNamespace
 
----@type ArgusModule
-argus = {
-    api = {
-        print = function() end,
-        log = function() end,
-        sleep = function() end,
-        timestamp = function() end,
-        format_bytes = function() end,
-        format_duration = function() end,
-        kill_process = function() end,
-    },
-    lifecycle = {
-        on_load = function() end,
-        on_unload = function() end,
-    },
-    events = {
-        general = { on_tick = function() end },
-        cpu = { on_tick = function() end },
-        memory = { on_tick = function() end },
-        disk = {
-            on_tick = function() end,
-            on_read = function() end,
-            on_write = function() end,
-        },
-        net = {
-            on_tick = function() end,
-            on_rx = function() end,
-            on_tx = function() end,
-        },
-        process = {
-            on_tick = function() end,
-            on_spawn = function() end,
-            on_exit = function() end,
-        },
-        gpu = { on_tick = function() end },
-        battery = { on_tick = function() end },
-        sensor = { on_tick = function() end },
-    },
-}
+---@module argus

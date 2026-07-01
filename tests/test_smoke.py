@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 from backend.core.engine import BackendEngine
-from backend.storage.database import DatabaseManager
 
 
 class TestSmoke:
@@ -12,8 +11,7 @@ class TestSmoke:
         if sys.platform not in ("win32", "linux"):
             return  # Smoke test only on supported platforms
 
-        db = DatabaseManager(tmp_path / "smoke.db")
-        engine = BackendEngine(db=db)
+        engine = BackendEngine()
 
         assert engine.loader.active_driver is not None, "No driver loaded"
 
@@ -24,5 +22,3 @@ class TestSmoke:
             ram_metrics = state["ram"].get("metrics", [{}])
             assert cpu_metrics[0].get("usage_percent") is not None
             assert ram_metrics[0].get("percent") is not None
-
-        db.close()
