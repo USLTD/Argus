@@ -707,3 +707,98 @@ class OverviewPage(QWidget):
                     )
                 )
 
+    def update_from_snapshot(
+            self,
+            data
+    ):
+
+        """
+        Used by Time Machine.
+        Updates Overview using SQLite data.
+        """
+
+        if "cpu" in data:
+
+            try:
+
+                self.cpu.update_data(
+                    data["cpu"]
+                )
+
+            except Exception:
+                pass
+
+        if "memory" in data:
+
+            try:
+
+                self.memory_bar.update_data(
+                    data["memory"]
+                )
+
+            except Exception:
+                pass
+
+        if "network" in data:
+
+            try:
+
+                self.network_widget.update_data(
+                    data["network"]
+                )
+
+            except Exception:
+                pass
+
+        if "processes" in data:
+            self.update_process_table_history(
+                data["processes"]
+            )
+
+    def update_process_table_history(
+            self,
+            processes
+    ):
+
+        self.table.setRowCount(
+            len(processes)
+        )
+
+        for row, proc in enumerate(processes):
+
+            values = [
+
+                proc.get("pid", ""),
+
+                proc.get("name", ""),
+
+                proc.get(
+                    "cpu_percent",
+                    ""
+                ),
+
+                proc.get(
+                    "memory_info",
+                    ""
+                ),
+
+                proc.get(
+                    "status",
+                    ""
+                ),
+
+                proc.get(
+                    "num_threads",
+                    ""
+                )
+
+            ]
+
+            for col, value in enumerate(values):
+                self.table.setItem(
+                    row,
+                    col,
+                    QTableWidgetItem(
+                        str(value)
+                    )
+                )

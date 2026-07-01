@@ -201,9 +201,17 @@ class SystemPage(QWidget):
 
         grid = QGridLayout(box)
 
-
-
         mem = self._bridge.get_memory_metrics()
+
+        if mem is None:
+            mem = {
+                "total": 0,
+                "used": 0,
+                "available": 0,
+                "free": 0,
+                "cached": 0,
+                "percent": 0
+            }
 
 
 
@@ -477,27 +485,17 @@ class SystemPage(QWidget):
                 0
             )
 
+            for addr in addresses:
 
-            for addr in addresses:  # type: ignore[union-attr]
+                if isinstance(addr, str):
 
+                    if addr:
+                        ip = addr
 
-                if addr.address:
+                else:
 
-
-                    grid.addWidget(
-                        QLabel(
-                            addr.address
-                        ),
-                        row,
-                        1
-                    )
-
-
-                    break
-
-
-
-            row += 1
+                    if addr.address:
+                        ip = addr.address
 
 
 
