@@ -50,7 +50,7 @@ from typing import TYPE_CHECKING, Any, Callable, NotRequired, TypedDict
 if TYPE_CHECKING:
     from backend.interfaces.contexts import DriverContext, ScriptContext
     from backend.storage.config import ArgusConfig as _ArgusConfig
-    from backend.storage.database import DatabaseManager as _DatabaseManager
+    from frontend.core.database import DatabaseManager as _DatabaseManager
 
 from .caps import (
     BatteryMetric,
@@ -66,6 +66,7 @@ from .caps import (
     StorageMetric,
     SystemCapabilities,
     SystemMetrics,
+    UserMetric,
 )
 from backend.interfaces.sentinels import TickSnapshot, Unavailable
 from .enums import ConfidenceScore, Permission
@@ -183,6 +184,9 @@ class BaseDriver(BasePlugin, ABC):
     @abstractmethod
     def tick_battery(self, ctx: DriverContext) -> MetricsCollection[BatteryMetric] | Unavailable:
         """Battery charge, status."""
+
+    def tick_users(self, ctx: DriverContext) -> MetricsCollection[UserMetric] | Unavailable:
+        """Logged-in users. Override to implement."""
 
     def get_static_info(self) -> StaticSystemInfo | None:
         """Return static system information, or None if unavailable.

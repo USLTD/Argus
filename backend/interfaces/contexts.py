@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from backend.core.driver_proxy import DriverProxy
     from backend.interfaces.plugins import BaseDriver
     from backend.storage.config import ArgusConfig
-    from backend.storage.database import DatabaseManager
+    from frontend.core.database import DatabaseManager
     from backend.core.engine import BackendEngine
 
 
@@ -46,7 +46,7 @@ class ScriptContext(Generic[T]):
 
     data: T
     config: ArgusConfig | None = None
-    db: DatabaseManager | None = None
+    db: DatabaseManager | None = None  # deprecated — will always be None after engine DB decoupling (Phase 3)
     driver: DriverProxy | BaseDriver | None = None
 
 
@@ -132,6 +132,14 @@ class SensorTickData(TypedDict):
     name: str
     value: float
     unit: str
+    category: str
+
+
+class UserTickData(TypedDict):
+    name: str
+    terminal: str | None
+    host: str | None
+    started: float
 
 
 class GeneralTickData(TypedDict):
@@ -144,4 +152,5 @@ class GeneralTickData(TypedDict):
     network: list[NetworkTickData] | None
     sensors: list[SensorTickData] | None
     battery: BatteryTickData | None
+    users: list[UserTickData] | None
     extra: dict[str, object]

@@ -1,19 +1,15 @@
 from pathlib import Path
 
 from backend.core.engine import BackendEngine
-from backend.storage.database import DatabaseManager
 
 
 class TestBackendEngine:
     def test_engine_initializes(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "test.db"
-        db = DatabaseManager(db_path)
-        engine = BackendEngine(db=db)
+        engine = BackendEngine()
         assert engine.loader is not None
 
     def test_get_system_state_returns_metrics(self, tmp_path: Path) -> None:
-        db = DatabaseManager(tmp_path / "test.db")
-        engine = BackendEngine(db=db)
+        engine = BackendEngine()
 
         state = engine.get_system_state()
         # The real driver runs, so state should have cpu/ram
@@ -23,11 +19,25 @@ class TestBackendEngine:
             assert "cpu" in state
             assert "ram" in state
 
-    def test_get_system_state_writes_to_db(self, tmp_path: Path) -> None:
-        db = DatabaseManager(tmp_path / "test.db")
-        engine = BackendEngine(db=db)
+    def test_tick_returns_snapshot(self, tmp_path: Path) -> None:
+        engine = BackendEngine()
 
-        engine.get_system_state()
-        results = db.query_range("2000-01-01", "2100-01-01")
-        assert len(results) >= 1
-        db.close()
+        snapshot = engine.tick()
+        assert hasattr(snapshot, "cpu")
+        assert hasattr(snapshot, "memory")
+
+    def test_tick_users_returns_expected_type(self, tmp_path: Path) -> None:
+        engine = BackendEngine()
+
+        result = engine.tick_users()
+        from backend.interfaces.caps import MetricsCollection
+        from backend.interfaces.sentinels import Unavailable
+
+        # Real driver may or may not support users; either type is valid
+        assert isinstance(result, (MetricsCollection, Unavailable))
+
+    def test_last_tick_duration_property(self, tmp_path: Path) -> None:
+        engine = BackendEngine()
+
+        assert isinstance(engine.last_tick_duration, float)
+        assert engine.last_tick_duration == 0.0

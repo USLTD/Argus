@@ -49,7 +49,7 @@ class TestInjectorRegistry:
         assert "events_battery" in names
         assert "events_sensor" in names
         assert "api" in names
-        assert len(registry) == 11
+        assert len(registry) == 12
 
     def test_init_injectors_idempotent(self) -> None:
         reset_injectors()

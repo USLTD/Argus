@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generic, TypeAlias, TypeVar
+from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from pydantic import BaseModel, ConfigDict
 
@@ -87,12 +87,20 @@ class SensorMetric(BaseModel):
     name: str = ""
     value: float = 0.0
     unit: str = "celsius"
+    category: str = "unknown"
 
 
 class BatteryMetric(BaseModel):
     percent: float = 0.0
     power_plugged: bool | None = None
     seconds_left: float | None = None
+
+
+class UserMetric(BaseModel):
+    name: str = ""
+    terminal: str | None = None
+    host: str | None = None
+    started: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +115,7 @@ NetworkMetrics: TypeAlias = MetricsCollection[NetworkMetric]
 GPUMetrics: TypeAlias = MetricsCollection[GPUMetric]
 SensorMetrics: TypeAlias = MetricsCollection[SensorMetric]
 BatteryMetrics: TypeAlias = MetricsCollection[BatteryMetric]
+UserMetrics: TypeAlias = MetricsCollection[UserMetric]
 
 # ---------------------------------------------------------------------------
 # Capability sub-models (used by get_capabilities())
@@ -154,29 +163,110 @@ class DriverInfo(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Static info
+# Static info — sentinel / type alias
+# ---------------------------------------------------------------------------
+
+
+class UnavailableInfo(BaseModel):
+    """Pydantic-compatible sentinel for unavailable static info.
+
+    Mirror of the Unavailable frozen dataclass in sentinels.py, but as a BaseModel
+    so model_dump() works natively through bridges.
+
+    model_dump() produces: {"unavailable": True, "reason": "...", "detail": "..."}
+    """
+
+    unavailable: bool = True
+    reason: str
+    detail: str = ""
+
+
+V = TypeVar("V")
+StaticField: TypeAlias = V | UnavailableInfo
+
+
+# ---------------------------------------------------------------------------
+# Static info — sub-models
+# ---------------------------------------------------------------------------
+
+
+class CpuInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: StaticField[str] = UnavailableInfo(reason="unsupported")
+    physical_cores: StaticField[int] = UnavailableInfo(reason="unsupported")
+    logical_cores: StaticField[int] = UnavailableInfo(reason="unsupported")
+    frequency_mhz: StaticField[float | None] = UnavailableInfo(reason="unsupported")
+
+
+class GpuInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: StaticField[str | None] = UnavailableInfo(reason="unsupported")
+    driver: StaticField[str | None] = UnavailableInfo(reason="unsupported")
+    vram_bytes: StaticField[int | None] = UnavailableInfo(reason="unsupported")
+
+
+class MotherboardInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    manufacturer: StaticField[str | None] = UnavailableInfo(reason="unsupported")
+    model: StaticField[str | None] = UnavailableInfo(reason="unsupported")
+    bios_version: StaticField[str | None] = UnavailableInfo(reason="unsupported")
+
+
+class OsInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: StaticField[str] = UnavailableInfo(reason="unsupported")
+    version: StaticField[str] = UnavailableInfo(reason="unsupported")
+    architecture: StaticField[str] = UnavailableInfo(reason="unsupported")
+
+
+class MemoryInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    total_ram_bytes: StaticField[int] = UnavailableInfo(reason="unsupported")
+
+
+class SystemInfo(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    hostname: StaticField[str] = UnavailableInfo(reason="unsupported")
+    username: StaticField[str] = UnavailableInfo(reason="unsupported")
+    python_version: StaticField[str] = UnavailableInfo(reason="unsupported")
+    boot_time: StaticField[str] = UnavailableInfo(reason="unsupported")
+
+
+# ---------------------------------------------------------------------------
+# Static info — aggregate model
 # ---------------------------------------------------------------------------
 
 
 class StaticSystemInfo(BaseModel):
-    os_name: str
-    os_version: str
-    hostname: str
-    username: str
-    cpu_brand: str
-    cpu_physical_cores: int
-    cpu_logical_cores: int
-    cpu_frequency_mhz: float | None = None
-    gpu_name: str | None = None
-    gpu_driver: str | None = None
-    gpu_vram_bytes: int | None = None
-    motherboard_manufacturer: str | None = None
-    motherboard_model: str | None = None
-    bios_version: str | None = None
-    total_ram_bytes: int
-    architecture: str
-    python_version: str
-    boot_time: str
+    cpu: CpuInfo
+    gpu: GpuInfo
+    motherboard: MotherboardInfo
+    os: OsInfo
+    memory: MemoryInfo
+    system: SystemInfo
+
+
+def dump_static_info(info: StaticSystemInfo) -> dict:
+    """Serialize StaticSystemInfo to nested dicts with UnavailableInfo converted."""
+    raw = info.model_dump(mode="python")
+    return _convert_unavailable(raw)
+
+
+def _convert_unavailable(val: object) -> Any:
+    """Recursively convert UnavailableInfo instances to dict."""
+    if isinstance(val, UnavailableInfo):
+        return val.model_dump()
+    if isinstance(val, dict):
+        return {k: _convert_unavailable(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple)):
+        return [_convert_unavailable(v) for v in val]
+    return val
 
 
 class SystemMetrics(BaseModel):
@@ -190,3 +280,4 @@ class SystemMetrics(BaseModel):
     network: MetricsCollection[NetworkMetric] | None = None
     sensors: MetricsCollection[SensorMetric] | None = None
     battery: MetricsCollection[BatteryMetric] | None = None
+    users: MetricsCollection[UserMetric] | None = None

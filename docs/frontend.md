@@ -248,6 +248,8 @@ def get_all() -> AggregatedStateDict
 | `load` | `SystemLoadDict` | `get_system_load()` |
 | `static_info` | `StaticInfoDict` | `get_static_info()` |
 
+> **Note**: The key is `disks` (plural), not `disk`. This matches the internal field name `self.disks` in the bridge. The individual `get_disk_usage(path)` method returns a single dict, while `get_all()["disks"]` is a list of all partitions.
+
 ---
 
 ## Performance Note

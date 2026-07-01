@@ -2,7 +2,7 @@
 CLI demo that exercises the full backend.
 
 Usage:
-    python main_console.py [--ticks N] [--interval N] [--verbose]
+    python main_console.py [--ticks N] [--interval N] [--verbose] [--debug]
 
 Reports driver inventory, loaded scripts, system metrics,
 script output, and a final DB summary.
@@ -14,12 +14,15 @@ import argparse
 import time
 
 import psutil
+from rich.console import Console
+from rich.table import Table
 
 from backend.core.engine import BackendEngine
 from backend.core.loader import DriverCandidate
 from backend.interfaces.enums import ConfidenceScore
 from backend.storage.config import ArgusConfig
-from backend.storage.database import DatabaseManager
+from frontend.core.database import DatabaseManager
+from frontend.core.metrics_converter import snapshot_to_system_metrics
 
 
 def _confidence_label(score: ConfidenceScore) -> str:
@@ -66,18 +69,33 @@ def main() -> None:
         "--ticks", type=int, default=10, help="Number of sampling ticks (0=infinite)"
     )
     parser.add_argument(
-        "--interval", type=float, default=1.0, help="Seconds between ticks"
+        "--interval", type=float, default=None, help="Seconds between ticks (default: from config.poll_interval_ms)",
     )
     parser.add_argument(
-        "--verbose", action="store_true", help="Show storage and sensor details"
+        "--verbose",
+        action="store_true",
+        help="Show storage (all mount points) and sensor details",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show ALL subsystems (users, top processes, all sensors, all mount points)",
     )
     args = parser.parse_args()
+
+    console = Console()
+    is_verbose = args.verbose or args.debug
 
     print("=== Booting Application ===\n")
 
     config = ArgusConfig()
+    interval = args.interval if args.interval is not None else config.poll_interval_ms / 1000
     db = DatabaseManager()
-    engine = BackendEngine(db=db)
+    engine = BackendEngine(
+        on_tick_callback=lambda snap: db.write_snapshot(
+            snapshot_to_system_metrics(snap)
+        )
+    )
 
     driver = engine.loader.active_driver
 
@@ -107,12 +125,11 @@ def main() -> None:
     _report_scripts(engine.loader.active_scripts)
 
     print("\n  Config:")
-    print(f"    theme={config.theme}, poll_interval_ms={config.poll_interval_ms}")
+    print(f"    poll_interval_ms={config.poll_interval_ms}ms (using --interval={interval}s)")
     print(f"    driver_override={config.driver_override}")
-    print(f"    database_retention_days={config.database_retention_days}")
 
     print(
-        f"\n=== Event Loop Started ({args.ticks} ticks, {args.interval}s interval) ===\n"
+        f"\n=== Event Loop Started ({args.ticks} ticks, {interval}s interval) ===\n"
     )
 
     tick_count = 0
@@ -143,23 +160,30 @@ def main() -> None:
             else:
                 ram_pct, ram_used, ram_total = 0.0, 0, 0
 
-            # --- Core metrics ---
+            # --- Combined system table ---
             p_cores = psutil.cpu_count(logical=False) or 0
             l_cores = psutil.cpu_count(logical=True) or 0
-            print(
-                f"[{tick_count:>3}] CPU: {cpu_usage:5.1f}% "
-                f"({p_cores}C/{l_cores}T)  "
-                f"| RAM: {ram_pct:5.1f}% "
-                f"({ram_used >> 20}MB / {ram_total >> 20}MB)"
+            t = Table(show_header=True, header_style="bold magenta")
+            t.add_column("Metric", style="cyan")
+            t.add_column("Value")
+            t.add_row(
+                "CPU",
+                f"{cpu_usage:5.1f}% ({p_cores}C/{l_cores}T)"
+                + (f" @ {cpu_freq:.0f} MHz" if cpu_freq else ""),
+            )
+            t.add_row(
+                "RAM",
+                f"{ram_pct:5.1f}% ({ram_used >> 20} MB / {ram_total >> 20} MB)",
             )
 
-            # --- Top process ---
-            procs_data = state.get("processes")
-            if procs_data and procs_data.get("metrics"):
-                procs = procs_data["metrics"]
-                top = sorted(procs, key=lambda p: p.get("cpu_percent", 0), reverse=True)[0]
-                print(
-                    f"         Top: PID {top['pid']:<6} {top.get('name', '?'):<20s} @ {top.get('cpu_percent', 0):5.1f}%"
+            # --- Disk (first mount point always, all mounts in verbose/debug) ---
+            storage_data = state.get("storage")
+            if storage_data and storage_data.get("metrics"):
+                first_vol = storage_data["metrics"][0]
+                t.add_row(
+                    "Disk",
+                    f"{first_vol.get('mount_point', '?')}: {first_vol.get('percent', 0):5.1f}% "
+                    f"({first_vol.get('used_bytes', 0) >> 20} MB / {first_vol.get('total_bytes', 0) >> 20} MB)",
                 )
 
             # --- Network ---
@@ -167,18 +191,17 @@ def main() -> None:
             if net_data and net_data.get("metrics"):
                 nets = net_data["metrics"]
                 n = nets[0]
-                print(
-                    f"         Net: {n.get('bytes_sent', 0) >> 10:>8}KB sent "
-                    f"/ {n.get('bytes_recv', 0) >> 10:>8}KB recv"
-                )
+                t.add_row("Net Sent", f"{n.get('bytes_sent', 0) >> 10:>8} KB")
+                t.add_row("Net Recv", f"{n.get('bytes_recv', 0) >> 10:>8} KB")
 
             # --- GPU ---
             gpu_data = state.get("gpu")
             if gpu_data and gpu_data.get("metrics"):
                 for g in gpu_data["metrics"]:
-                    print(
-                        f"         GPU: {g.get('name', '?')} @ {g.get('usage_percent', 0):4.0f}% "
-                        f"({g.get('memory_used', 0) >> 20}MB / {g.get('memory_total', 0) >> 20}MB)"
+                    t.add_row(
+                        f"GPU {g.get('name', '?')}",
+                        f"{g.get('usage_percent', 0):4.0f}% "
+                        f"({g.get('memory_used', 0) >> 20} MB / {g.get('memory_total', 0) >> 20} MB)",
                     )
 
             # --- Battery ---
@@ -186,25 +209,109 @@ def main() -> None:
             if battery_data and battery_data.get("metrics"):
                 bat = battery_data["metrics"][0]
                 plugged = "plugged" if bat.get("power_plugged") else "on battery"
-                print(f"         Battery: {bat.get('percent', 0):5.1f}% ({plugged})")
+                t.add_row("Battery", f"{bat.get('percent', 0):5.1f}% ({plugged})")
 
-            # --- Storage (verbose) ---
-            storage_data = state.get("storage")
-            if args.verbose and storage_data and storage_data.get("metrics"):
+            # --- Top process ---
+            procs_data = state.get("processes")
+            if procs_data and procs_data.get("metrics"):
+                procs = procs_data["metrics"]
+                top = sorted(
+                    procs, key=lambda p: p.get("cpu_percent", 0), reverse=True
+                )[0]
+                t.add_row(
+                    "Top Proc",
+                    f"PID {top['pid']} {top.get('name', '?')} @ {top.get('cpu_percent', 0):5.1f}%",
+                )
+
+            console.print()
+            console.print(t)
+
+            # --- Storage: verbose / debug ---
+            if is_verbose and storage_data and storage_data.get("metrics"):
+                st = Table(
+                    show_header=True,
+                    header_style="bold magenta",
+                    title="Storage",
+                )
+                st.add_column("Mount", style="cyan")
+                st.add_column("Usage", justify="right")
+                st.add_column("Used", justify="right")
+                st.add_column("Total", justify="right")
                 for vol in storage_data["metrics"]:
-                    print(
-                        f"         Disk {vol.get('mount_point', '?')}: "
-                        f"{vol.get('percent', 0):5.1f}% "
-                        f"({vol.get('used_bytes', 0) >> 20}MB / {vol.get('total_bytes', 0) >> 20}MB)"
+                    st.add_row(
+                        vol.get("mount_point", "?"),
+                        f"{vol.get('percent', 0):5.1f}%",
+                        f"{vol.get('used_bytes', 0) >> 20} MB",
+                        f"{vol.get('total_bytes', 0) >> 20} MB",
                     )
+                console.print(st)
 
-            # --- Sensors (verbose) ---
+            # --- Sensors: verbose / debug ---
             sensors_data = state.get("sensors")
-            if args.verbose and sensors_data and sensors_data.get("metrics"):
+            if is_verbose and sensors_data and sensors_data.get("metrics"):
+                st = Table(
+                    show_header=True,
+                    header_style="bold magenta",
+                    title="Sensors",
+                )
+                st.add_column("Name", style="cyan")
+                st.add_column("Value", justify="right")
+                st.add_column("Unit")
                 for s in sensors_data["metrics"]:
-                    print(
-                        f"         Sensor {s.get('name', '?')}: {s.get('value', 0):.1f} {s.get('unit', '?')}"
+                    st.add_row(
+                        s.get("name", "?"),
+                        f"{s.get('value', 0):.1f}",
+                        s.get("unit", "?"),
                     )
+                console.print(st)
+
+            # --- Debug-only sections ---
+            if args.debug:
+                # --- Users ---
+                users_data = state.get("users")
+                if users_data and users_data.get("metrics"):
+                    ut = Table(
+                        show_header=True,
+                        header_style="bold magenta",
+                        title="Users",
+                    )
+                    ut.add_column("User", style="cyan")
+                    ut.add_column("Terminal")
+                    ut.add_column("Host")
+                    ut.add_column("Started")
+                    for u in users_data["metrics"]:
+                        ut.add_row(
+                            u.get("name", "?"),
+                            str(u.get("terminal", "?")),
+                            str(u.get("host", "?")),
+                            str(u.get("started", "?")),
+                        )
+                    console.print(ut)
+
+                # --- Top 5 processes by CPU ---
+                if procs_data and procs_data.get("metrics"):
+                    sorted_procs = sorted(
+                        procs_data["metrics"],
+                        key=lambda p: p.get("cpu_percent", 0),
+                        reverse=True,
+                    )[:5]
+                    pt = Table(
+                        show_header=True,
+                        header_style="bold magenta",
+                        title="Top Processes (by CPU)",
+                    )
+                    pt.add_column("PID", justify="right", style="cyan")
+                    pt.add_column("Name")
+                    pt.add_column("CPU%", justify="right")
+                    pt.add_column("Memory%", justify="right")
+                    for p in sorted_procs:
+                        pt.add_row(
+                            str(p.get("pid", "?")),
+                            str(p.get("name", "?")),
+                            f"{p.get('cpu_percent', 0):5.1f}",
+                            f"{p.get('memory_percent', 0):5.1f}",
+                        )
+                    console.print(pt)
 
             # --- Script output ---
             for script in engine.loader.active_scripts:
@@ -214,7 +321,7 @@ def main() -> None:
                         print(f"  [{name}] {line}")
 
             elapsed = time.monotonic() - start
-            sleep_time = max(0.0, args.interval - elapsed)
+            sleep_time = max(0.0, interval - elapsed)
             if sleep_time > 0:
                 time.sleep(sleep_time)
 

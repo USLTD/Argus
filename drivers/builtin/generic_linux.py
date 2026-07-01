@@ -1,23 +1,44 @@
-from typing import Any, override
-
+import getpass
+import platform
+import socket
 import time
+from datetime import datetime
+from typing import Any, override
 
 import psutil
 
 from backend.interfaces.caps import (
+    BatteryCapabilities,
     BatteryMetric,
+    CpuCapabilities,
+    CpuInfo,
     CPUMetric,
+    DriverInfo,
+    GpuCapabilities,
+    GpuInfo,
     GPUMetric,
+    MemoryInfo,
     MemoryMetric,
     MetricMetadata,
     MetricsCollection,
+    MotherboardInfo,
+    NetworkCapabilities,
     NetworkMetric,
+    OsInfo,
+    ProcessCapabilities,
     ProcessMetric,
+    SensorCapabilities,
     SensorMetric,
+    StaticSystemInfo,
+    StorageCapabilities,
     StorageMetric,
     SystemCapabilities,
+    SystemInfo,
+    UnavailableInfo,
+    UserMetric,
 )
 from backend.interfaces.contexts import DriverContext
+from backend.interfaces.enums import ConfidenceScore
 from backend.interfaces.plugins import BaseDriver, PluginMeta
 from backend.interfaces.sentinels import Unavailable, TickSnapshot
 
@@ -37,17 +58,24 @@ METADATA: PluginMeta = {
     ],
 }
 
-
 class LinuxDriver(BaseDriver):
     @override
     def get_capabilities(self) -> SystemCapabilities:
         return SystemCapabilities(
             has_process_list=True,
-            has_gpu=GPUtil is not None,
+            has_gpu=True,
             has_storage=True,
             has_network=True,
             has_sensors=True,
             has_battery=True,
+            cpu=CpuCapabilities(present=True, frequency=True, core_count=True),
+            gpu=GpuCapabilities(present=True, detail=True),
+            process=ProcessCapabilities(list=True, detail=True),
+            storage=StorageCapabilities(present=True, disk_io=True),
+            network=NetworkCapabilities(present=True, bandwidth=True),
+            sensors=SensorCapabilities(present=True),
+            battery=BatteryCapabilities(present=True),
+            driver=DriverInfo(name="Generic Linux Driver", version="1.0", platform="linux"),
         )
 
     @override
@@ -192,6 +220,7 @@ class LinuxDriver(BaseDriver):
                         SensorMetric(
                             name=f"{name}_{entry.label or 'unknown'}",
                             value=entry.current,
+                            category=name,
                         )
                     )
             return MetricsCollection[SensorMetric](
@@ -219,6 +248,106 @@ class LinuxDriver(BaseDriver):
             )
         except Exception as e:
             return Unavailable("error", str(e))
+
+    @override
+    def tick_users(self, ctx: DriverContext) -> MetricsCollection[UserMetric] | Unavailable:  # type: ignore[reportGeneralTypeIssues]  # basedpyright false positive: method exists on BaseDriver at runtime
+        try:
+            users = psutil.users()
+            return MetricsCollection[UserMetric](
+                metadata=MetricMetadata(collected_at=time.time()),
+                metrics=[
+                    UserMetric(
+                        name=u.name,
+                        terminal=u.terminal,
+                        host=u.host,
+                        started=u.started,
+                    )
+                    for u in users
+                ],
+            )
+        except Exception as e:
+            return Unavailable("error", str(e))
+
+    @override
+    def _collect_static_info(self) -> StaticSystemInfo:
+        os_name = platform.system()
+        os_version = platform.version()
+        hostname = socket.gethostname()
+        username = getpass.getuser()
+
+        cpu_brand: str = "Unknown"
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        cpu_brand = line.split(":", 1)[1].strip()
+                        break
+        except Exception:
+            cpu_brand = platform.processor() or "Unknown"
+
+        cpu_phys = psutil.cpu_count(logical=False) or 0
+        cpu_log = psutil.cpu_count(logical=True) or 0
+
+        cpu_freq = psutil.cpu_freq()
+        cpu_freq_mhz: float | None = cpu_freq.current if cpu_freq is not None else None
+
+        total_ram = psutil.virtual_memory().total
+        arch = platform.architecture()[0]
+        py_ver = platform.python_version()
+        boot_time = datetime.fromtimestamp(psutil.boot_time()).isoformat()
+
+        # Motherboard info from sysfs
+        mobo_info: dict[str, Any] = {}
+        dmi_base = "/sys/class/dmi/id"
+        try:
+            with open(f"{dmi_base}/sys_vendor") as f:
+                mobo_info["manufacturer"] = f.read().strip()
+        except Exception:
+            pass
+        try:
+            with open(f"{dmi_base}/product_name") as f:
+                mobo_info["model"] = f.read().strip()
+        except Exception:
+            pass
+        try:
+            with open(f"{dmi_base}/bios_version") as f:
+                mobo_info["bios_version"] = f.read().strip()
+        except Exception:
+            pass
+
+        # GPU info via GPUtil (may be unavailable)
+        gpu_info: dict[str, Any] = {}
+        try:
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu_info = {
+                    "name": gpus[0].name,
+                    "vram_bytes": int(gpus[0].memoryTotal * 1024 * 1024),
+                }
+        except Exception:
+            pass
+
+        return StaticSystemInfo(
+            cpu=CpuInfo(
+                name=cpu_brand,
+                physical_cores=cpu_phys,
+                logical_cores=cpu_log,
+                frequency_mhz=cpu_freq_mhz,
+            ),
+            gpu=GpuInfo(
+                name=gpu_info.get("name") if "name" in gpu_info else UnavailableInfo(reason="unsupported"),
+                driver=UnavailableInfo(reason="unsupported"),  # Linux GPUtil doesn't expose driver version
+                vram_bytes=gpu_info.get("vram_bytes") if "vram_bytes" in gpu_info else UnavailableInfo(reason="unsupported"),
+            ),
+            motherboard=MotherboardInfo(
+                manufacturer=mobo_info.get("manufacturer") if "manufacturer" in mobo_info else UnavailableInfo(reason="unsupported"),
+                model=mobo_info.get("model") if "model" in mobo_info else UnavailableInfo(reason="unsupported"),
+                bios_version=mobo_info.get("bios_version") if "bios_version" in mobo_info else UnavailableInfo(reason="unsupported"),
+            ),
+            os=OsInfo(name=os_name, version=os_version, architecture=arch),
+            memory=MemoryInfo(total_ram_bytes=total_ram),
+            system=SystemInfo(hostname=hostname, username=username, python_version=py_ver, boot_time=boot_time),
+        )
 
     @override
     def manage_process(self, pid: int, action: str, **kwargs: Any) -> bool:

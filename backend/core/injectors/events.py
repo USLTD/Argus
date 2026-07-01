@@ -27,4 +27,5 @@ def get_events_injectors() -> list[EventInjector]:
         EventInjector("events.gpu", ["on_tick"], permission=_SR),
         EventInjector("events.battery", ["on_tick"], permission=_SR),
         EventInjector("events.sensor", ["on_tick"], permission=_SR),
+        EventInjector("events.users", ["on_tick"], permission=_SR),
     ]

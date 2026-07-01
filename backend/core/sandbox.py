@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from lupa import LuaRuntime
 
 from backend.core.injectors import HookInjector, all_injectors, init_injectors
-from backend.interfaces.enums import CompatAction, Permission
+from backend.interfaces.enums import CompatAction, Permission, ScriptExecutionMode
 from backend.interfaces.plugins import BaseDriver, BaseUserScript, PluginMeta
 
 if TYPE_CHECKING:
@@ -68,9 +68,16 @@ class LuaScriptWrapper(BaseUserScript):
         "[Sandbox] Permission denied: '{perm}' is not declared in METADATA.permissions"
     )
 
-    def __init__(self, file_path: Path, source: str, meta: PluginMeta) -> None:
+    def __init__(
+        self,
+        file_path: Path,
+        source: str,
+        meta: PluginMeta,
+        execution_mode: ScriptExecutionMode = ScriptExecutionMode.NONBLOCKING,
+    ) -> None:
         self.file_path = file_path
         self.METADATA = meta
+        self.execution_mode = execution_mode
         self._callbacks: dict[str, Any] = {}
         self._output_buffer: list[str] = []
         self._driver: BaseDriver | None = None
@@ -107,6 +114,20 @@ class LuaScriptWrapper(BaseUserScript):
 
         # Phase 2e — wire print alias to argus.api.print
         g["print"] = g["argus"]["api"]["print"]
+
+    # ------------------------------------------------------------------
+    # Introspection properties
+    # ------------------------------------------------------------------
+
+    @property
+    def hooked_events(self) -> list[str]:
+        """Event paths this script has registered callbacks for."""
+        return list(self._callbacks.keys())
+
+    @property
+    def script_type(self) -> str:
+        """Returns ``\"lua\"`` — used by list_scripts() to identify the language."""
+        return "lua"
 
     # ------------------------------------------------------------------
     # Injector helper

@@ -11,6 +11,7 @@ Screens
 6  Processes  — DataTable with search filter, terminate, kill
 7  System     — static host / platform / CPU / RAM info
 8  About      — version, keybindings, credits
+9  Settings   — live runtime config editor
 """
 
 from __future__ import annotations
@@ -23,9 +24,11 @@ import time
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, ProgressBar, Static
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, ProgressBar, Select, Static, Switch
+
+from backend.storage.config import SUBSYSTEM_NAMES
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -66,16 +69,14 @@ def _fmt_seconds(secs: float | None) -> str:
     return f"{h}h {m}m" if h else f"{m}m"
 
 
-def _create_bridge():
-    """Instantiate the backend engine & driver → SyncBridge."""
-    from backend.core.engine import BackendEngine
-    from backend.bridges.sync_bridge import SyncBridge
+def _create_bridge(engine):
+    """Instantiate the driver → AsyncBridge."""
+    from backend.bridges.async_bridge import AsyncBridge
 
-    engine = BackendEngine()
     driver = engine.loader.active_driver
     if driver is None:
         raise RuntimeError("No driver loaded")
-    return SyncBridge(driver=driver)
+    return AsyncBridge(driver=driver)
 
 
 def _discover_mounts() -> list[str]:
@@ -238,6 +239,13 @@ Input:focus {
     height: 3;
     margin: 0 1 1 1;
 }
+
+/* ── Settings screen ────────────────────────────────────────────── */
+.setting-section {
+    margin-top: 1;
+    text-style: underline;
+    padding: 0 2;
+}
 """
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -280,23 +288,24 @@ class OverviewScreen(Screen):
             yield Static("", id="ov-battery")
 
     def on_mount(self) -> None:
-        self.set_interval(2, self._poll)
-        self._poll()
+        poll_ms = self.app.engine.config.poll_interval_ms  # type: ignore[union-attr]
+        self.set_interval(max(poll_ms / 1000, 0.5), self._poll)
+        self.set_timer(0, self._poll)
 
-    def _poll(self) -> None:
+    async def _poll(self) -> None:
         try:
-            self.app.bridge.tick_all()  # type: ignore[union-attr]
+            data = await self.app.bridge.get_all()  # type: ignore[union-attr]
         except Exception:
             return
 
         # CPU
-        cpu = self.app.bridge.get_cpu_metrics()  # type: ignore[union-attr]
+        cpu = data["cpu"]
         cpu_pct = cpu.get("cpu_percent", 0.0)
         freq = _fmt_freq(cpu.get("frequency"))
         self.query_one("#ov-cpu", Static).update(f"{cpu_pct:.1f}%\n{freq}")
 
         # RAM
-        mem = self.app.bridge.get_memory_metrics()  # type: ignore[union-attr]
+        mem = data["memory"]
         m_total = mem.get("total", 0)
         m_used = mem.get("used", 0)
         m_pct = mem.get("percent", 0.0)
@@ -304,13 +313,16 @@ class OverviewScreen(Screen):
             f"{m_pct:.1f}%\n{_fmt_bytes(m_used)} / {_fmt_bytes(m_total)}"
         )
 
-        # Disk
+        # Disk (first mount)
         mounts = _discover_mounts()
         d_total = 0
         d_used = 0
         d_pct = 0.0
         if mounts:
-            d = self.app.bridge.get_disk_usage(mounts[0])  # type: ignore[union-attr]
+            try:
+                d = await self.app.bridge.get_disk_usage(mounts[0])  # type: ignore[union-attr]
+            except Exception:
+                d = {}
             d_total = d.get("total", 0)
             d_used = d.get("used", 0)
             d_pct = d.get("percent", 0.0)
@@ -319,11 +331,11 @@ class OverviewScreen(Screen):
         )
 
         # Process count
-        procs = self.app.bridge.get_process_list()  # type: ignore[union-attr]
+        procs = data["processes"]
         self.query_one("#ov-procs", Static).update(str(len(procs)))
 
         # Network
-        net = self.app.bridge.get_network_io()  # type: ignore[union-attr]
+        net = data["network"]
         sent = net.get("bytes_sent", 0)
         recv = net.get("bytes_recv", 0)
         self.query_one("#ov-network", Static).update(
@@ -333,7 +345,7 @@ class OverviewScreen(Screen):
         )
 
         # Battery
-        bat = self.app.bridge.get_battery()  # type: ignore[union-attr]
+        bat = data["battery"]
         bat_pct = bat.get("percent", 0.0)
         plugged = bat.get("power_plugged")
         if bat_pct > 0 or plugged is not None:
@@ -346,8 +358,8 @@ class OverviewScreen(Screen):
         else:
             self.query_one("#ov-battery", Static).update("[b]Battery[/b]  N/A")
 
-    def action_refresh(self) -> None:
-        self._poll()
+    async def action_refresh(self) -> None:
+        await self._poll()
 
 
 # ── CPU ────────────────────────────────────────────────────────────────────
@@ -371,16 +383,17 @@ class CPUScreen(Screen):
 
     def on_mount(self) -> None:
         self._bars_mounted = False
-        self.set_interval(2, self._poll)
-        self._poll()
+        poll_ms = self.app.engine.config.poll_interval_ms  # type: ignore[union-attr]
+        self.set_interval(max(poll_ms / 1000, 0.5), self._poll)
+        self.set_timer(0, self._poll)
 
-    def _poll(self) -> None:
+    async def _poll(self) -> None:
         try:
-            self.app.bridge.tick_all()  # type: ignore[union-attr]
+            data = await self.app.bridge.get_all()  # type: ignore[union-attr]
         except Exception:
             return
 
-        cpu = self.app.bridge.get_cpu_metrics()  # type: ignore[union-attr]
+        cpu = data["cpu"]
         agg = cpu.get("cpu_percent", 0.0)
         freq = cpu.get("frequency")
         per_core: list[float] = cpu.get("per_core", [])
@@ -414,7 +427,7 @@ class CPUScreen(Screen):
                 pass
 
         # Temperatures
-        sensors = self.app.bridge.get_sensors()  # type: ignore[union-attr]
+        sensors = data["sensors"]
         temps = sensors.get("temperatures", {})
         if temps:
             lines: list[str] = []
@@ -425,8 +438,8 @@ class CPUScreen(Screen):
         else:
             self.query_one("#cpu-temps", Static).update("  No temperature data")
 
-    def action_refresh(self) -> None:
-        self._poll()
+    async def action_refresh(self) -> None:
+        await self._poll()
 
 
 # ── Memory ─────────────────────────────────────────────────────────────────
@@ -447,16 +460,17 @@ class MemoryScreen(Screen):
             yield Static("", id="mem-avail", classes="info-label")
 
     def on_mount(self) -> None:
-        self.set_interval(2, self._poll)
-        self._poll()
+        poll_ms = self.app.engine.config.poll_interval_ms  # type: ignore[union-attr]
+        self.set_interval(max(poll_ms / 1000, 0.5), self._poll)
+        self.set_timer(0, self._poll)
 
-    def _poll(self) -> None:
+    async def _poll(self) -> None:
         try:
-            self.app.bridge.tick_all()  # type: ignore[union-attr]
+            data = await self.app.bridge.get_all()  # type: ignore[union-attr]
         except Exception:
             return
 
-        mem = self.app.bridge.get_memory_metrics()  # type: ignore[union-attr]
+        mem = data["memory"]
         total = mem.get("total", 0)
         used = mem.get("used", 0)
         avail = mem.get("available", 0)
@@ -469,8 +483,8 @@ class MemoryScreen(Screen):
         self.query_one("#mem-free", Static).update(f"  Free:      {_fmt_bytes(free)}")
         self.query_one("#mem-avail", Static).update(f"  Available: {_fmt_bytes(avail)}")
 
-    def action_refresh(self) -> None:
-        self._poll()
+    async def action_refresh(self) -> None:
+        await self._poll()
 
 
 # ── Disk ───────────────────────────────────────────────────────────────────
@@ -488,19 +502,18 @@ class DiskScreen(Screen):
 
     def on_mount(self) -> None:
         self._cards_mounted = False
-        self.set_interval(2, self._poll)
-        self._poll()
+        poll_ms = self.app.engine.config.poll_interval_ms  # type: ignore[union-attr]
+        self.set_interval(max(poll_ms / 1000, 0.5), self._poll)
+        self.set_timer(0, self._poll)
 
-    def _poll(self) -> None:
-        try:
-            self.app.bridge.tick_all()  # type: ignore[union-attr]
-        except Exception:
-            return
-
+    async def _poll(self) -> None:
         mounts = _discover_mounts()
         disk_data: list[tuple[str, dict]] = []
         for m in mounts:
-            d = self.app.bridge.get_disk_usage(m)  # type: ignore[union-attr]
+            try:
+                d = await self.app.bridge.get_disk_usage(m)  # type: ignore[union-attr]
+            except Exception:
+                continue
             if d.get("total", 0) > 0:
                 disk_data.append((m, d))
 
@@ -542,8 +555,8 @@ class DiskScreen(Screen):
             except Exception:
                 pass
 
-    def action_refresh(self) -> None:
-        self._poll()
+    async def action_refresh(self) -> None:
+        await self._poll()
 
 
 # ── Network ────────────────────────────────────────────────────────────────
@@ -568,16 +581,17 @@ class NetworkScreen(Screen):
         self._prev_sent: int = 0
         self._prev_recv: int = 0
         self._prev_time: float = 0.0
-        self.set_interval(2, self._poll)
-        self._poll()
+        poll_ms = self.app.engine.config.poll_interval_ms  # type: ignore[union-attr]
+        self.set_interval(max(poll_ms / 1000, 0.5), self._poll)
+        self.set_timer(0, self._poll)
 
-    def _poll(self) -> None:
+    async def _poll(self) -> None:
         try:
-            self.app.bridge.tick_all()  # type: ignore[union-attr]
+            data = await self.app.bridge.get_all()  # type: ignore[union-attr]
         except Exception:
             return
 
-        net = self.app.bridge.get_network_io()  # type: ignore[union-attr]
+        net = data["network"]
         sent = net.get("bytes_sent", 0)
         recv = net.get("bytes_recv", 0)
         now = time.monotonic()
@@ -611,8 +625,8 @@ class NetworkScreen(Screen):
         self._prev_recv = recv
         self._prev_time = now
 
-    def action_refresh(self) -> None:
-        self._poll()
+    async def action_refresh(self) -> None:
+        await self._poll()
 
 
 # ── Processes ──────────────────────────────────────────────────────────────
@@ -621,7 +635,11 @@ class NetworkScreen(Screen):
 class ProcessesScreen(Screen):
     """DataTable of processes with search filter, terminate, kill."""
 
-    BINDINGS = [("r", "refresh", "Refresh")]
+    BINDINGS = [
+        ("r", "refresh", "Refresh"),
+        ("t", "terminate", "Terminate"),
+        ("k", "kill", "Kill"),
+    ]
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -633,13 +651,14 @@ class ProcessesScreen(Screen):
                 yield Button("Kill", id="btn-kill", variant="error")
 
     def on_mount(self) -> None:
-        self.set_interval(2, self._poll)
-        self._poll()
+        poll_ms = self.app.engine.config.poll_interval_ms  # type: ignore[union-attr]
+        self.set_interval(max(poll_ms / 1000, 0.5), self._poll)
+        self.set_timer(0, self._poll)
 
-    def _poll(self) -> None:
+    async def _poll(self) -> None:
         try:
-            self.app.bridge.tick_all()  # type: ignore[union-attr]
-            processes = list(self.app.bridge.get_process_list())  # type: ignore[union-attr]
+            data = await self.app.bridge.get_all()  # type: ignore[union-attr]
+            processes = list(data["processes"])
         except Exception:
             processes = []
 
@@ -660,7 +679,7 @@ class ProcessesScreen(Screen):
             status = (p.get("status", "") or "?")[:12]
             table.add_row(str(pid), name, f"{cpu_pct:.1f}", _fmt_bytes(mem), status)
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         table = self.query_one("#proc-table", DataTable)
         if not table.row_count:
             return
@@ -674,12 +693,43 @@ class ProcessesScreen(Screen):
             return
 
         if event.button.id == "btn-terminate":
-            self.app.bridge.terminate_process(pid)  # type: ignore[union-attr]
+            await self.app.bridge.terminate_process(pid)  # type: ignore[union-attr]
         elif event.button.id == "btn-kill":
-            self.app.bridge.kill_process(pid)  # type: ignore[union-attr]
+            await self.app.bridge.kill_process(pid)  # type: ignore[union-attr]
 
-    def action_refresh(self) -> None:
-        self._poll()
+    async def action_refresh(self) -> None:
+        await self._poll()
+
+    async def action_terminate(self) -> None:
+        table = self.query_one("#proc-table", DataTable)
+        if table.row_count and 0 <= table.cursor_row < table.row_count:
+            try:
+                pid = int(table.get_row_at(table.cursor_row)[0])
+                await self.app.bridge.terminate_process(pid)  # type: ignore[union-attr]
+            except (ValueError, IndexError):
+                pass
+
+    async def action_kill(self) -> None:
+        table = self.query_one("#proc-table", DataTable)
+        if table.row_count and 0 <= table.cursor_row < table.row_count:
+            try:
+                pid = int(table.get_row_at(table.cursor_row)[0])
+                await self.app.bridge.kill_process(pid)  # type: ignore[union-attr]
+            except (ValueError, IndexError):
+                pass
+
+
+def _fmt_info(val: object, fallback: str = "") -> str:
+    """Format a static-info value, handling UnavailableInfo dicts."""
+    if isinstance(val, dict) and val.get("unavailable") is True:
+        reason = val.get("reason", "unknown")
+        detail = val.get("detail", "")
+        if detail:
+            return f"[N/A: {reason} — {detail}]"
+        return f"[N/A: {reason}]"
+    if val is None:
+        return fallback or "N/A"
+    return str(val)
 
 
 # ── System ─────────────────────────────────────────────────────────────────
@@ -703,36 +753,49 @@ class SystemScreen(Screen):
             yield Static("", id="sys-boot", classes="info-label")
 
     def on_mount(self) -> None:
-        self.set_interval(2, self._poll)
-        self._poll()
+        poll_ms = self.app.engine.config.poll_interval_ms  # type: ignore[union-attr]
+        self.set_interval(max(poll_ms / 1000, 0.5), self._poll)
+        self.set_timer(0, self._poll)
 
-    def _poll(self) -> None:
+    async def _poll(self) -> None:
         try:
-            self.app.bridge.tick_all()  # type: ignore[union-attr]
+            info = await self.app.bridge.get_static_info()  # type: ignore[union-attr]
         except Exception:
-            pass
+            return
 
-        info = self.app.bridge.get_static_info()  # type: ignore[union-attr]
+        if not isinstance(info, dict):
+            return
 
-        hostname = info.get("hostname") or _platform.node()
+        # System info
+        system = info.get("system", {}) if isinstance(info, dict) else {}
+        hostname = _fmt_info(system.get("hostname"), fallback=_platform.node())
         self.query_one("#sys-hostname", Static).update(f"  Hostname:  {hostname}")
 
-        plat = info.get("platform") or sys.platform
-        plat_ver = info.get("platform_version") or _platform.version()
+        # OS info
+        os_info = info.get("os", {}) if isinstance(info, dict) else {}
+        plat = _fmt_info(os_info.get("name"), fallback=sys.platform)
+        plat_ver = _fmt_info(os_info.get("version"), fallback=_platform.version())
         self.query_one("#sys-platform", Static).update(
             f"  Platform:  {plat} {plat_ver}"
         )
 
-        cpu_brand = info.get("cpu_brand") or _platform.processor()
+        # CPU info
+        cpu = info.get("cpu", {}) if isinstance(info, dict) else {}
+        cpu_brand = _fmt_info(cpu.get("name"), fallback=_platform.processor())
         self.query_one("#sys-cpu", Static).update(f"  CPU:       {cpu_brand}")
 
-        phys = info.get("cpu_physical_cores", 0)
-        logic = info.get("cpu_logical_cores", 0)
+        phys_raw = cpu.get("physical_cores", 0)
+        logic_raw = cpu.get("logical_cores", 0)
+        phys = phys_raw if isinstance(phys_raw, int) else 0
+        logic = logic_raw if isinstance(logic_raw, int) else 0
         self.query_one("#sys-cores", Static).update(
             f"  Cores:     {phys} physical / {logic} logical"
         )
 
-        total_ram = info.get("total_ram", 0)
+        # Memory info
+        memory = info.get("memory", {}) if isinstance(info, dict) else {}
+        total_ram_raw = memory.get("total_ram_bytes", 0)
+        total_ram = total_ram_raw if isinstance(total_ram_raw, (int, float)) else 0
         self.query_one("#sys-ram", Static).update(f"  RAM:       {_fmt_bytes(total_ram)}")
 
         self.query_one("#sys-python", Static).update(
@@ -742,15 +805,204 @@ class SystemScreen(Screen):
         arch = _platform.machine()
         self.query_one("#sys-arch", Static).update(f"  Arch:      {arch}")
 
-        bt = self.app.bridge.get_boot_time()  # type: ignore[union-attr]
+        try:
+            bt = await self.app.bridge.get_boot_time()  # type: ignore[union-attr]
+        except Exception:
+            bt = 0.0
         if bt and bt > 0:
             boot_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(bt))
             self.query_one("#sys-boot", Static).update(f"  Boot:      {boot_str}")
         else:
             self.query_one("#sys-boot", Static).update("  Boot:      N/A")
 
+    async def action_refresh(self) -> None:
+        await self._poll()
+
+
+# ── Settings ────────────────────────────────────────────────────────────────
+
+
+class SettingsScreen(Screen):
+    """Runtime config editor — edit ArgusConfig fields live."""
+
+    BINDINGS = [("escape", "go_back", "Back"), ("r", "refresh", "Refresh")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Settings", classes="section-title")
+            yield Static("", id="settings-error")
+
+            with ScrollableContainer():
+                # ── Polling section ──
+                yield Static("[bold]Polling[/bold]", classes="setting-section")
+                yield Label("Poll interval (ms):")
+                yield Input(id="cfg-poll_interval_ms", type="integer", placeholder="1000")
+                yield Label("Process tick interval:")
+                yield Input(id="cfg-process_tick_interval", type="integer", placeholder="5")
+                yield Label("Driver override (empty = auto):")
+                yield Input(id="cfg-driver_override", placeholder="")
+
+                # ── Scripting section ──
+                yield Static("[bold]Scripting[/bold]", classes="setting-section")
+                yield Label("Script batch size:")
+                yield Input(id="cfg-script_batch_size", type="integer", placeholder="4")
+                yield Label("Script timeout (ms):")
+                yield Input(id="cfg-script_timeout_ms", type="integer", placeholder="5000")
+                yield Label("Execution mode:")
+                yield Select(
+                    id="cfg-script_execution_mode",
+                    options=[("nonblocking", "nonblocking"), ("blocking", "blocking"), ("mixed", "mixed")],
+                    value="nonblocking",
+                )
+                yield Label("Compat default:")
+                yield Select(
+                    id="cfg-script_compatibility_default",
+                    options=[("skip", "skip"), ("allow", "allow"), ("deny", "deny")],
+                    value="skip",
+                )
+
+                # ── Subsystems section ──
+                yield Static("[bold]Subsystems[/bold]", classes="setting-section")
+                yield Label("Enable/disable and set intervals per subsystem:")
+                for sub_name in SUBSYSTEM_NAMES:
+                    with Horizontal():
+                        yield Switch(id=f"cfg-subsystem_enabled-{sub_name}", value=True)
+                        yield Label(f" {sub_name}")
+                        yield Input(id=f"cfg-subsystem_intervals-{sub_name}", type="integer", placeholder="1000")
+                        yield Label("ms")
+
+                # ── Buttons ──
+                with Horizontal():
+                    yield Button("Submit", id="btn-settings-submit", variant="primary")
+                    yield Button("Reset to defaults", id="btn-settings-reset", variant="default")
+
+    def on_mount(self) -> None:
+        self._populate()
+
+    def on_screen_resume(self) -> None:
+        """Re-populate when screen becomes active (handles external config changes)."""
+        self._populate()
+
+    def _populate(self) -> None:
+        config = self.app.engine.get_config()  # type: ignore[union-attr]
+        for key, value in config.items():
+            try:
+                widget = self.query_one(f"#cfg-{key}")
+            except Exception:
+                continue
+            if isinstance(widget, Select):
+                widget.value = value
+            elif isinstance(widget, Switch):
+                widget.value = bool(value)
+            elif isinstance(widget, Input):
+                widget.value = str(value) if value is not None else ""
+
+        # Subsystem enable switches
+        for name in SUBSYSTEM_NAMES:
+            try:
+                sw = self.query_one(f"#cfg-subsystem_enabled-{name}", Switch)
+                sw.value = bool(config.get("subsystem_enabled", {}).get(name, True))
+            except Exception:
+                pass
+
+        # Subsystem interval inputs
+        for name in SUBSYSTEM_NAMES:
+            try:
+                inp = self.query_one(f"#cfg-subsystem_intervals-{name}", Input)
+                val = config.get("subsystem_intervals", {}).get(name, 1000)
+                inp.value = str(val)
+            except Exception:
+                pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-settings-submit":
+            self._save()
+        elif event.button.id == "btn-settings-reset":
+            self._reset()
+
+    def _save(self) -> None:
+        error_display = self.query_one("#settings-error", Static)
+        error_display.update("")
+        errors: list[str] = []
+
+        # Simple scalar fields
+        scalar_fields: dict[str, type] = {
+            "poll_interval_ms": int,
+            "process_tick_interval": int,
+            "script_batch_size": int,
+            "script_timeout_ms": int,
+            "script_execution_mode": str,
+            "script_compatibility_default": str,
+            "driver_override": str,
+        }
+        for key, field_type in scalar_fields.items():
+            try:
+                widget = self.query_one(f"#cfg-{key}")
+                if isinstance(widget, Select):
+                    value = widget.value
+                else:
+                    raw = widget.value.strip()  # type: ignore[union-attr]
+                    value = field_type(raw) if raw else None
+                self.app.engine.set_config(key, value)  # type: ignore[union-attr]
+            except Exception as e:
+                errors.append(f"  {key}: {e}")
+
+        # Subsystem enabled dict
+        enabled: dict[str, bool] = {}
+        for name in SUBSYSTEM_NAMES:
+            try:
+                sw = self.query_one(f"#cfg-subsystem_enabled-{name}", Switch)
+                enabled[name] = sw.value
+            except Exception as e:
+                errors.append(f"  subsystem_enabled.{name}: {e}")
+        try:
+            self.app.engine.set_config("subsystem_enabled", enabled)  # type: ignore[union-attr]
+        except Exception as e:
+            errors.append(f"  subsystem_enabled: {e}")
+
+        # Subsystem intervals dict
+        intervals: dict[str, int] = {}
+        for name in SUBSYSTEM_NAMES:
+            try:
+                inp = self.query_one(f"#cfg-subsystem_intervals-{name}", Input)
+                raw = inp.value.strip()
+                intervals[name] = int(raw) if raw else 1000
+            except Exception as e:
+                errors.append(f"  subsystem_intervals.{name}: {e}")
+        try:
+            self.app.engine.set_config("subsystem_intervals", intervals)  # type: ignore[union-attr]
+        except Exception as e:
+            errors.append(f"  subsystem_intervals: {e}")
+
+        if errors:
+            error_display.update("[red]Validation errors:[/red]\n" + "\n".join(errors))
+        else:
+            error_display.update("[green]Settings saved successfully![/green]")
+
+    def _reset(self) -> None:
+        from backend.storage.config import ArgusConfig
+
+        defaults = ArgusConfig()
+        for key in defaults.model_dump(mode="json"):
+            if key in SUBSYSTEM_NAMES:
+                continue  # Skip invalid keys
+            try:
+                self.app.engine.set_config(key, getattr(defaults, key))  # type: ignore[union-attr]
+            except Exception:
+                pass
+        # Reset subsystem configs too
+        self.app.engine.set_config("subsystem_enabled", defaults.subsystem_enabled)  # type: ignore[union-attr]
+        self.app.engine.set_config("subsystem_intervals", defaults.subsystem_intervals)  # type: ignore[union-attr]
+        self.app.engine.set_config("subsystem_timeout", defaults.subsystem_timeout)  # type: ignore[union-attr]
+        self._populate()
+        error_display = self.query_one("#settings-error", Static)
+        error_display.update("[green]Settings reset to defaults![/green]")
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
+
     def action_refresh(self) -> None:
-        self._poll()
+        self._populate()
 
 
 # ── About ──────────────────────────────────────────────────────────────────
@@ -777,6 +1029,7 @@ class AboutScreen(Screen):
             yield Static("              6  —  Processes")
             yield Static("              7  —  System")
             yield Static("              8  —  About")
+            yield Static("              9  —  Settings")
             yield Static("              r  —  Refresh")
             yield Static("              q  —  Quit")
             yield Static("")
@@ -792,13 +1045,97 @@ class AboutScreen(Screen):
         pass  # Nothing to refresh
 
 
+# ── Drivers ─────────────────────────────────────────────────────────────────
+
+
+class DriverScreen(Screen):
+    """Active driver info + all candidates with compatibility scores."""
+
+    BINDINGS = [("escape", "go_back", "Back"), ("r", "refresh", "Refresh")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Drivers", classes="section-title")
+            yield Static("", id="drv-active")
+            yield Static("", id="drv-candidates", classes="info-label")
+
+    def on_mount(self) -> None:
+        self._refresh()
+
+    def _refresh(self) -> None:
+        engine = self.app.engine  # type: ignore[union-attr]
+        active_div = self.query_one("#drv-active", Static)
+        driver = engine.loader.active_driver
+        if driver:
+            caps = driver.get_capabilities()
+            active_div.update(
+                f"  Active: [bold]{caps.driver.name}[/bold] "
+                f"v{caps.driver.version} ([italic]{caps.driver.platform}[/italic])\n"
+                f"    CPU={caps.cpu.present}, GPU={caps.gpu.present}, "
+                f"Storage={caps.storage.present}, Network={caps.network.present}"
+            )
+        else:
+            active_div.update("  [red]No active driver[/red]")
+
+        # Show all candidates
+        candidates_div = self.query_one("#drv-candidates", Static)
+        active_name = caps.driver.name if (driver and (caps := driver.get_capabilities())) else None
+        lines = ["  Candidates:"]
+        for c in engine.list_drivers():
+            tag = "[green]ACTIVE[/green]" if c.get("name") == active_name else f"score={c['score']}"
+            lines.append(f"    {c['name']:20s} [{tag}]")
+        candidates_div.update("\n".join(lines))
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
+
+    def action_refresh(self) -> None:
+        self._refresh()
+
+
+# ── Scripts ─────────────────────────────────────────────────────────────────
+
+
+class ScriptScreen(Screen):
+    """List of loaded scripts with mode/permission info."""
+
+    BINDINGS = [("escape", "go_back", "Back"), ("r", "refresh", "Refresh")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Scripts", classes="section-title")
+            yield Static("", id="scr-list", classes="info-label")
+
+    def on_mount(self) -> None:
+        self._refresh()
+
+    def _refresh(self) -> None:
+        engine = self.app.engine  # type: ignore[union-attr]
+        scripts = engine.list_scripts()
+        lines = [f"  Loaded: {len(scripts)}"]
+        for s in scripts:
+            lines.append(
+                f"    {s['name']:20s} [{s['type']:6s}] mode={s['execution_mode']:12s}  "
+                f"perms={len(s['permissions'])} events={len(s['hooked_events'])}"
+            )
+        if not scripts:
+            lines.append("    (no scripts loaded)")
+        self.query_one("#scr-list", Static).update("\n".join(lines))
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
+
+    def action_refresh(self) -> None:
+        self._refresh()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Application
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 class ArgusTUI(App):
-    """8-screen system monitor powered by Textual."""
+    """Multi-screen system monitor powered by Textual."""
 
     TITLE = "Argus TUI"
     CSS = CSS
@@ -812,6 +1149,9 @@ class ArgusTUI(App):
         Binding("6", "show_processes", "Processes"),
         Binding("7", "show_system", "System"),
         Binding("8", "show_about", "About"),
+        Binding("9", "show_settings", "Settings"),
+        Binding("d", "show_drivers", "Drivers"),
+        Binding("s", "show_scripts", "Scripts"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -825,6 +1165,9 @@ class ArgusTUI(App):
         "processes": ProcessesScreen,
         "system": SystemScreen,
         "about": AboutScreen,
+        "settings": SettingsScreen,
+        "drivers": DriverScreen,
+        "scripts": ScriptScreen,
     }
 
     def compose(self) -> ComposeResult:
@@ -833,7 +1176,10 @@ class ArgusTUI(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.bridge = _create_bridge()
+        from backend.core.engine import BackendEngine
+
+        self.engine = BackendEngine()
+        self.bridge = _create_bridge(self.engine)
 
     def on_mount(self) -> None:
         self.push_screen("overview")
@@ -864,15 +1210,24 @@ class ArgusTUI(App):
     def action_show_about(self) -> None:
         self.push_screen("about")
 
-    def action_refresh(self) -> None:
+    def action_show_settings(self) -> None:
+        self.push_screen("settings")
+
+    def action_show_drivers(self) -> None:
+        self.push_screen("drivers")
+
+    def action_show_scripts(self) -> None:
+        self.push_screen("scripts")
+
+    async def action_refresh(self) -> None:
         """Force a bridge tick and re-poll the current screen."""
         try:
-            self.bridge.tick_all()
+            await self.bridge.tick_all()
         except Exception:
             return
         screen = self.screen
         if screen is not None and hasattr(screen, "_poll"):
-            screen._poll()  # type: ignore[union-attr]
+            await screen._poll()  # type: ignore[union-attr]
 
 
 # ═══════════════════════════════════════════════════════════════════════════

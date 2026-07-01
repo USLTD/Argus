@@ -31,7 +31,8 @@ if TYPE_CHECKING:
 from backend.interfaces.contexts import (
     GeneralTickData, CpuTickData, MemoryTickData,
     DiskTickData, NetworkTickData, ProcessTickData,
-    GpuTickData, BatteryTickData, SensorTickData, ScriptContext,
+    GpuTickData, BatteryTickData, SensorTickData,
+    UserTickData, ScriptContext,
 )
 from backend.interfaces.enums import Permission
 
@@ -146,6 +147,11 @@ class SensorEvents:
     def __init__(self) -> None:
         self.on_tick = CallbackSlot[Callable[[ScriptContext[list[SensorTickData] | None]], None]]()
 
+class UsersEvents:
+    on_tick: CallbackSlot[Callable[[ScriptContext[list[UserTickData] | None]], None]]
+    def __init__(self) -> None:
+        self.on_tick = CallbackSlot[Callable[[ScriptContext[list[UserTickData] | None]], None]]()
+
 class EventsNamespace:
     """``argus.events`` — subsystem event callbacks."""
 
@@ -158,6 +164,7 @@ class EventsNamespace:
     gpu: GpuEvents
     battery: BatteryEvents
     sensor: SensorEvents
+    users: UsersEvents
 
     def __init__(self) -> None:
         self.general = GeneralEvents()
@@ -169,6 +176,7 @@ class EventsNamespace:
         self.gpu = GpuEvents()
         self.battery = BatteryEvents()
         self.sensor = SensorEvents()
+        self.users = UsersEvents()
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +252,7 @@ class TypesNamespace:
     GpuCtx: type = ScriptContext  # type: ignore[valid-type]
     BatCtx: type = ScriptContext  # type: ignore[valid-type]
     SensorCtx: type = ScriptContext  # type: ignore[valid-type]
+    UserCtx: type = ScriptContext  # type: ignore[valid-type]
     GeneralCtx: type = ScriptContext  # type: ignore[valid-type]
     LifecycleCtx: type = ScriptContext  # type: ignore[valid-type]
 
@@ -282,6 +291,7 @@ _SUBSYSTEM_EVENT_NAMES: dict[str, list[str]] = {
     "gpu": ["on_tick"],
     "battery": ["on_tick"],
     "sensor": ["on_tick"],
+    "users": ["on_tick"],
 }
 
 

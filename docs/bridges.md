@@ -2,8 +2,8 @@
 
 Three bridge classes provide the data-access layer between backend drivers and frontend consumers. The bridges share the same output contracts (dict shapes) but differ in execution model.
 
-- **SyncBridge** -- synchronous, tick-before-read. Used by `main_tui.py` (Textual TUI).
-- **AsyncBridge** -- asyncio-native, auto-tick on every read. Intended for async consumers (web API, CLI tools).
+- **SyncBridge** -- synchronous, tick-before-read. Used by CLI tools and scripts.
+- **AsyncBridge** -- asyncio-native, auto-tick on every read. Used by `main_tui.py` (Textual TUI).
 - **EngineBridge** -- PyQt6 QObject with timer-based polling and signal emission. Used by `main_gui.py`.
 
 ---
@@ -11,7 +11,7 @@ Three bridge classes provide the data-access layer between backend drivers and f
 ## SyncBridge
 
 **Location**: `backend/bridges/sync_bridge.py`
-**Used by**: Textual TUI and CLI tools.
+**Used by**: CLI tools and scripts.
 
 A thin synchronous wrapper around a `BaseDriver`. Every `get_*()` method reads from the most recent snapshot; call `tick_all()` to refresh the snapshot before reading.
 
@@ -193,6 +193,11 @@ def get_all(self) -> dict:
 
 Returns all metrics from one fresh tick as a single dict. **Caller does not need to call `tick_all()` first** -- this method calls it internally, then invokes every individual `get_*()` method in sequence.
 
+Note: Unlike AsyncBridge, `SyncBridge.get_all()` calls the individual `get_*()` methods which
+enrich CPU metrics with static core counts. So `physical_cores` and `logical_cores` are
+correctly populated here. However, if converter functions are called directly (bypassing
+the bridge), `static_cores=0` can still produce zero values in the CPU dict.
+
 ```python
 {
     "cpu":         { ... },   # get_cpu_metrics()
@@ -212,7 +217,7 @@ Returns all metrics from one fresh tick as a single dict. **Caller does not need
 ## AsyncBridge
 
 **Location**: `backend/bridges/async_bridge.py`
-**Intended for**: Future async consumers (web API, async CLI tools).
+**Intended for**: Textual TUI, web API, async CLI tools.
 
 Same per-metric API as SyncBridge but all `get_*()` methods are `async` and call `await self.tick_all()` internally for fresh data on each read. Blocking driver calls run in a thread executor via `loop.run_in_executor()`.
 
@@ -673,3 +678,5 @@ All converters accept the `Unavailable` sentinel as input and return zero/empty 
 2. **`get_all()` coverage**: AsyncBridge's `get_all()` passes `static_cores=0, static_threads=0` to CPU conversion (no static-info enrichment) and omits `static_info` and `boot_time`. EngineBridge's `get_all()` returns `disks` as a list (plural key) and includes `load` and `static_info`.
 
 3. **EngineBridge constraints**: `get_boot_time()` always returns `0.0`. `get_sensors()` returns a flat dict without the `"temperatures"` wrapper. The `get_all()` call hardcodes `sensors` to `{"temperatures": []}`.
+
+4. **`users` field**: The engine's `TickSnapshot` now includes a `users` field (a `MetricsCollection[UserMetric]` from `tick_users()`). Neither bridge surfaces this field in `get_all()` yet; it is available through direct snapshot access via `bridge.snapshot.users`.

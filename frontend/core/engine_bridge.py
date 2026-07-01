@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 from backend.interfaces.contexts import BridgeContext
 
 if TYPE_CHECKING:
-    from backend.interfaces.enums import Permission
+    from backend.core.engine import ScriptInfo
+    from backend.interfaces.enums import Permission, ScriptExecutionMode
+    from backend.storage.config import ArgusConfig
 
 
 # ------------------------------------------------------------------
@@ -68,18 +70,14 @@ class SystemLoadDict(TypedDict):
     handles: int
 
 
-class StaticInfoDict(TypedDict):
-    hostname: str
-    os_name: str
-    os_version: str
-    architecture: str
-    cpu_brand: str
-    cpu_physical_cores: int
-    cpu_logical_cores: int
-    cpu_frequency_mhz: float | None
-    total_ram_bytes: int
-    python_version: str
-    boot_time: str
+class StaticInfoDict(TypedDict, total=False):
+    """Static system info with nested sub-model keys."""
+    cpu: dict
+    gpu: dict
+    motherboard: dict
+    os: dict
+    memory: dict
+    system: dict
 
 
 class BatteryDict(TypedDict):
@@ -125,16 +123,19 @@ class EngineBridge(QObject):
     """
 
     state_updated = pyqtSignal(BridgeContext)
+    config_changed_signal = pyqtSignal(dict)
 
     def __init__(
         self,
         engine: object = None,
         parent: QObject | None = None,
         permissions: set[Permission] | None = None,
+        config: ArgusConfig | None = None,
     ) -> None:
         super().__init__(parent)
         self._engine = engine
         self._permissions = permissions
+        self._config = config
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._state_cache: dict[str, object] | None = None
@@ -145,9 +146,16 @@ class EngineBridge(QObject):
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def start_polling(self, interval_ms: int = 1000) -> None:
-        """Start the internal tick timer."""
+    def start_polling(self, interval_ms: int | None = None) -> None:
+        """Start the internal tick timer with the configured interval."""
+        if interval_ms is None:
+            interval_ms = self._config.poll_interval_ms if self._config else 1000
         self._timer.start(interval_ms)
+
+    def set_interval(self, ms: int) -> None:
+        """Restart the timer with a new interval (ms)."""
+        self._timer.stop()
+        self._timer.start(ms)
 
     def stop_polling(self) -> None:
         """Stop the internal tick timer."""
@@ -225,12 +233,15 @@ class EngineBridge(QObject):
         agg = metrics[0] if metrics else {}
         per_core_data = [m["usage_percent"] for m in metrics[1:] if "usage_percent" in m]
         static = state.get("static_info", {})
+        cpu_static = static.get("cpu", {}) if isinstance(static, dict) else {}
+        raw_cores = cpu_static.get("physical_cores", 0)
+        raw_threads = cpu_static.get("logical_cores", 0)
         return CpuMetricsDict(
             cpu_percent=agg.get("usage_percent", 0.0),  # type: ignore[arg-type]
             per_core=per_core_data,
             frequency=agg.get("frequency_mhz"),  # type: ignore[arg-type]
-            physical_cores=static.get("cpu_physical_cores", 0),  # type: ignore[arg-type]
-            logical_cores=static.get("cpu_logical_cores", 0),  # type: ignore[arg-type]
+            physical_cores=raw_cores if isinstance(raw_cores, int) else 0,
+            logical_cores=raw_threads if isinstance(raw_threads, int) else 0,
         )
 
     def get_memory_metrics(self) -> MemoryMetricsDict:
@@ -364,12 +375,7 @@ class EngineBridge(QObject):
         """Static system info from the active driver (or defaults)."""
         from backend.interfaces.enums import Permission
         if not self._check(Permission.SYSTEM_READ):
-            return StaticInfoDict(
-                hostname="", os_name="", os_version="", architecture="",
-                cpu_brand="", cpu_physical_cores=0, cpu_logical_cores=0,
-                cpu_frequency_mhz=None, total_ram_bytes=0,
-                python_version="", boot_time="",
-            )
+            return StaticInfoDict()
         driver = self._driver
         static = None
         if driver is not None and hasattr(driver, "get_static_info"):
@@ -378,36 +384,9 @@ class EngineBridge(QObject):
             except Exception:
                 pass
         if static is not None:
-            if hasattr(static, "model_dump"):
-                raw = static.model_dump()
-            else:
-                raw = dict(static)  # type: ignore[arg-type]
-            return StaticInfoDict(
-                hostname=raw.get("hostname", ""),
-                os_name=raw.get("os_name", ""),
-                os_version=raw.get("os_version", ""),
-                architecture=raw.get("architecture", ""),
-                cpu_brand=raw.get("cpu_brand", ""),
-                cpu_physical_cores=raw.get("cpu_physical_cores", 0),
-                cpu_logical_cores=raw.get("cpu_logical_cores", 0),
-                cpu_frequency_mhz=raw.get("cpu_frequency_mhz"),
-                total_ram_bytes=raw.get("total_ram_bytes", 0),
-                python_version=raw.get("python_version", ""),
-                boot_time=raw.get("boot_time", ""),
-            )
-        return StaticInfoDict(
-            hostname="",
-            os_name="",
-            os_version="",
-            architecture="",
-            cpu_brand="",
-            cpu_physical_cores=0,
-            cpu_logical_cores=0,
-            cpu_frequency_mhz=None,
-            total_ram_bytes=0,
-            python_version="",
-            boot_time="",
-        )
+            from backend.interfaces.caps import dump_static_info as _dump
+            return _dump(static)  # type: ignore[return-value]
+        return StaticInfoDict()
 
     def get_boot_time(self) -> float:
         """Boot timestamp as a float (or 0.0 when unavailable)."""
@@ -504,6 +483,60 @@ class EngineBridge(QObject):
             except Exception:
                 pass
         return False
+
+    # ------------------------------------------------------------------
+    # Script management  (delegates to engine script API)
+    # ------------------------------------------------------------------
+
+    def get_scripts(self) -> list[ScriptInfo]:
+        """Return metadata for all loaded scripts."""
+        from backend.interfaces.enums import Permission
+
+        if not self._check(Permission.SCRIPT_READ):
+            return []
+        if self._engine is None:
+            return []
+        try:
+            return self._engine.list_scripts()  # type: ignore[union-attr, reportAttributeAccessIssue]
+        except Exception:
+            return []
+
+    def set_script_mode(self, name: str, mode: ScriptExecutionMode) -> None:
+        """Change a script's execution mode by name."""
+        if self._engine is None:
+            return
+        try:
+            self._engine.set_script_execution_mode(name, mode)  # type: ignore[union-attr, reportAttributeAccessIssue]
+        except Exception:
+            pass
+
+    def set_script_permissions(
+        self, name: str, permissions: list[Permission]
+    ) -> None:
+        """Update a script's allowed permissions by name."""
+        if self._engine is None:
+            return
+        try:
+            self._engine.set_script_permissions(name, permissions)  # type: ignore[union-attr, reportAttributeAccessIssue]
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Config read/write  (delegates to engine config API)
+    # ------------------------------------------------------------------
+
+    def read_config(self) -> dict[str, Any]:
+        """Read the full config from the engine."""
+        if self._engine is None:
+            return {}
+        return self._engine.get_config()  # type: ignore[union-attr]
+
+    def write_config(self, key: str, value: Any) -> None:
+        """Write a single config value through the engine."""
+        if self._engine is None:
+            raise RuntimeError("EngineBridge has no engine reference")
+        self._engine.set_config(key, value)  # type: ignore[union-attr]
+        self.config_changed_signal.emit({key: value})
 
 
 # ------------------------------------------------------------------

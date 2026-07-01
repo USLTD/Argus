@@ -12,6 +12,12 @@ class ConfidenceScore(IntEnum):
     FULL = 4
 
 
+class ScriptExecutionMode(IntEnum):
+    NONBLOCKING = 1
+    BLOCKING = 2
+    MIXED = 3
+
+
 class CompatAction(StrEnum):
     LOAD = "load"
     SKIP = "skip"
@@ -92,5 +98,6 @@ EventName: Literal[
     "gpu.on_tick",
     "battery.on_tick",
     "sensor.on_tick",
+    "users.on_tick",
 ]
 """Literal type for event names used in hook injection and dispatch."""
