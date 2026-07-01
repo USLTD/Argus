@@ -9,14 +9,14 @@ from PyQt6.QtWidgets import (
 
 from PyQt6.QtGui import QAction
 
-
+# from frontend.pages.Performance import PerformancePage
 from frontend.ui.sidebar import Sidebar
 from frontend.ui.top_toolbar import TopToolbar
 from frontend.ui.status_bar import StatusBar
 
 
 from frontend.pages.overview_page import OverviewPage
-from frontend.pages.cpu_page import CPUPage
+from frontend.pages.Performance import PerformancePage
 from frontend.pages.memory_page import MemoryPage
 from frontend.pages.disk_page import DiskPage
 from frontend.pages.network_page import NetworkPage
@@ -213,7 +213,7 @@ class MainWindow(QMainWindow):
 
 
         self.stack.addWidget(
-            CPUPage(bridge=bridge)
+            PerformancePage(bridge=bridge)
         )
 
 
