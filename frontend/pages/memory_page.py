@@ -1,43 +1,28 @@
-from PyQt6.QtWidgets import QWidget
-from PyQt6.QtWidgets import QVBoxLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
-from frontend.ui.widgets.memory_bar import (
-    MemoryBar
-)
-
-from frontend.graphs.memory_graph import (
-    MemoryGraph
-)
-
+from frontend.ui.widgets.memory_bar import MemoryBar
+from frontend.graphs.memory_graph import MemoryGraph
 from frontend.core.engine_bridge import EngineBridge
 
 
 class MemoryPage(QWidget):
 
-    def __init__(self, bridge: EngineBridge | None = None) -> None:
+    def __init__(self, bridge: EngineBridge | None = None):
 
         super().__init__()
 
-        self._bridge: EngineBridge | None = bridge
+        self._bridge = bridge
 
         layout = QVBoxLayout(self)
 
-        layout.addWidget(
-            MemoryGraph()
+        self.memory_graph = MemoryGraph(
+            bridge=self._bridge
         )
 
-        layout.addWidget(
-            MemoryBar(bridge=self._bridge)
+        self.memory_bar = MemoryBar(
+            bridge=self._bridge
         )
 
-        layout.addWidget(
-            MemoryBar(bridge=self._bridge)
-        )
-
-        layout.addWidget(
-            MemoryBar(bridge=self._bridge)
-        )
-
-        layout.addWidget(
-            MemoryBar(bridge=self._bridge)
-        )
+        layout.addWidget(self.memory_graph)
+        layout.addWidget(self.memory_bar)
+        layout.addStretch()

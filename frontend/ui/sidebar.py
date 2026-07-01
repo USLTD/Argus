@@ -6,16 +6,16 @@ from PyQt6.QtCore import QSize
 class Sidebar(QListWidget):
 
     PAGES = [
-        ("Overview", "assets/icons/Overview.png"),
-        ("Processes", "assets/icons/Processes.png"),
-        ("System", "assets/icons/System.png"),
-        ("Performance", "assets/icons/Performance.png"),
-        ("Memory", "assets/icons/Memory.png"),
-        ("Disk", "assets/icons/Disk.png"),
-        ("Network", "assets/icons/Network.png"),
-        ("Time Machine", "assets/icons/TimeMachine.png"),
-        ("Settings", "assets/icons/Settings.png"),
-        ("Information", "assets/icons/Information.png"),
+        ("Overview", "frontend/assets/icons/Overview.png"),
+        ("Processes", "frontend/assets/icons/Processes.png"),
+        ("System", "frontend/assets/icons/System.png"),
+        ("Performance", "frontend/assets/icons/Performance.png"),
+        ("Memory", "frontend/assets/icons/Memory.png"),
+        ("Disk", "frontend/assets/icons/Disk.png"),
+        ("Network", "frontend/assets/icons/Network.png"),
+        ("Time Machine", "frontend/assets/icons/TimeMachine.png"),
+        ("Settings", "frontend/assets/icons/Settings.png"),
+        ("Information", "frontend/assets/icons/Information.png"),
     ]
 
 

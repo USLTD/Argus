@@ -229,15 +229,21 @@ class EngineBridge(QObject):
         state = self._state
         cpu = state.get("cpu", {})
         assert isinstance(cpu, dict)
-        metrics = cpu.get("metrics", [{}])
+        metrics = cpu.get("metrics", [])
         agg = metrics[0] if metrics else {}
-        per_core_data = [m["usage_percent"] for m in metrics[1:] if "usage_percent" in m]
+
+        per_core_data = [
+            m["usage_percent"]
+            for m in metrics[1:]
+            if "usage_percent" in m
+        ]
+
         static = state.get("static_info", {})
         cpu_static = static.get("cpu", {}) if isinstance(static, dict) else {}
         raw_cores = cpu_static.get("physical_cores", 0)
         raw_threads = cpu_static.get("logical_cores", 0)
         return CpuMetricsDict(
-            cpu_percent=agg.get("usage_percent", 0.0),  # type: ignore[arg-type]
+            cpu_percent=agg.get("usage_percent", 0.0),
             per_core=per_core_data,
             frequency=agg.get("frequency_mhz"),  # type: ignore[arg-type]
             physical_cores=raw_cores if isinstance(raw_cores, int) else 0,
