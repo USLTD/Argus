@@ -118,18 +118,24 @@ class MemoryBar(QWidget):
 
 
 
-        self.used_bar.setValue(
-            int(used/total*100)
-        )
+        if total > 0:
+            self.used_bar.setValue(
+                int(used/total*100)
+            )
 
-        self.cached_bar.setValue(
-            int(cached/total*100)
-        )
+            self.cached_bar.setValue(
+                int(cached/total*100)
+            )
 
-        self.available_bar.setValue(
-            int(available/total*100)
-        )
+            self.available_bar.setValue(
+                int(available/total*100)
+            )
 
-        self.free_bar.setValue(
-            int(free/total*100)
-        )
+            self.free_bar.setValue(
+                int(free/total*100)
+            )
+        else:
+            self.used_bar.setValue(0)
+            self.cached_bar.setValue(0)
+            self.available_bar.setValue(0)
+            self.free_bar.setValue(0)
