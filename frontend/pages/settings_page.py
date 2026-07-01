@@ -1,9 +1,11 @@
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QTabWidget,
+    QFormLayout,
     QComboBox,
-    QCheckBox,
+    QSpinBox,
+    QLineEdit,
+    QPushButton,
     QLabel
 )
 
@@ -14,98 +16,266 @@ class SettingsPage(QWidget):
 
         super().__init__()
 
+        self.bridge = bridge
+
         layout = QVBoxLayout(self)
 
-        tabs = QTabWidget()
-
-        tabs.addTab(
-            self.general_tab(),
-            "General"
+        layout.addWidget(
+            QLabel("Argus Configuration")
         )
 
-        tabs.addTab(
-            self.appearance_tab(),
-            "Appearance"
+        form = QFormLayout()
+
+
+        # driver_override
+
+        self.driver_override = QLineEdit()
+
+        self.driver_override.setPlaceholderText(
+            "Auto detect"
         )
 
-        tabs.addTab(
-            self.notifications_tab(),
-            "Notifications"
+        form.addRow(
+            "Driver Override",
+            self.driver_override
         )
 
-        tabs.addTab(
-            self.recording_tab(),
-            "Recording"
+
+        # poll_interval_ms
+
+        self.poll_interval = QSpinBox()
+
+        self.poll_interval.setRange(
+            100,
+            60000
         )
 
-        layout.addWidget(tabs)
+        self.poll_interval.setValue(
+            1000
+        )
 
-    def general_tab(self):
+        form.addRow(
+            "Poll Interval (ms)",
+            self.poll_interval
+        )
 
-        widget = QWidget()
 
-        layout = QVBoxLayout(widget)
+        # script_compatibility_default
+
+        self.script_compatibility = QComboBox()
+
+        self.script_compatibility.addItems(
+            [
+                "skip",
+                "load"
+            ]
+        )
+
+        form.addRow(
+            "Script Compatibility",
+            self.script_compatibility
+        )
+
+
+        # script_batch_size
+
+        self.script_batch_size = QSpinBox()
+
+        self.script_batch_size.setRange(
+            1,
+            100
+        )
+
+        self.script_batch_size.setValue(
+            4
+        )
+
+        form.addRow(
+            "Script Batch Size",
+            self.script_batch_size
+        )
+
+
+        # script_timeout_ms
+
+        self.script_timeout = QSpinBox()
+
+        self.script_timeout.setRange(
+            100,
+            60000
+        )
+
+        self.script_timeout.setValue(
+            5000
+        )
+
+        form.addRow(
+            "Script Timeout (ms)",
+            self.script_timeout
+        )
+
+
+        # script_execution_mode
+
+        self.script_execution_mode = QComboBox()
+
+        self.script_execution_mode.addItems(
+            [
+                "blocking",
+                "nonblocking",
+                "mixed"
+            ]
+        )
+
+        self.script_execution_mode.setCurrentText(
+            "nonblocking"
+        )
+
+        form.addRow(
+            "Execution Mode",
+            self.script_execution_mode
+        )
+
+
+        # process_tick_interval
+
+        self.process_tick_interval = QSpinBox()
+
+        self.process_tick_interval.setRange(
+            1,
+            100
+        )
+
+        self.process_tick_interval.setValue(
+            5
+        )
+
+        form.addRow(
+            "Process Tick Interval",
+            self.process_tick_interval
+        )
+
+
+        layout.addLayout(form)
+
+
+        self.save_button = QPushButton(
+            "Save Configuration"
+        )
+
+        self.save_button.clicked.connect(
+            self.save_config
+        )
 
         layout.addWidget(
-            QCheckBox(
-                "Start with Windows"
+            self.save_button
+        )
+
+
+        self.load_config()
+
+
+
+    def load_config(self):
+
+        if not self.bridge:
+            return
+
+
+        config = self.bridge.get_config()
+
+
+        self.driver_override.setText(
+            config.get("driver_override") or ""
+        )
+
+
+        self.poll_interval.setValue(
+            config.get(
+                "poll_interval_ms",
+                1000
             )
         )
 
-        layout.addWidget(
-            QCheckBox(
-                "Minimize to Tray"
+
+        self.script_compatibility.setCurrentText(
+            config.get(
+                "script_compatibility_default",
+                "skip"
             )
         )
 
-        return widget
 
-    def appearance_tab(self):
-
-        widget = QWidget()
-
-        layout = QVBoxLayout(widget)
-
-        combo = QComboBox()
-
-        combo.addItems([
-            "Light",
-            "Dark",
-            "System"
-        ])
-
-        layout.addWidget(
-            QLabel("Theme")
-        )
-
-        layout.addWidget(combo)
-
-        return widget
-
-    def notifications_tab(self):
-
-        widget = QWidget()
-
-        layout = QVBoxLayout(widget)
-
-        layout.addWidget(
-            QCheckBox(
-                "Enable Alerts"
+        self.script_batch_size.setValue(
+            config.get(
+                "script_batch_size",
+                4
             )
         )
 
-        return widget
 
-    def recording_tab(self):
-
-        widget = QWidget()
-
-        layout = QVBoxLayout(widget)
-
-        layout.addWidget(
-            QLabel(
-                "Recording Settings"
+        self.script_timeout.setValue(
+            config.get(
+                "script_timeout_ms",
+                5000
             )
         )
 
-        return widget
+
+        self.script_execution_mode.setCurrentText(
+            config.get(
+                "script_execution_mode",
+                "nonblocking"
+            )
+        )
+
+
+        self.process_tick_interval.setValue(
+            config.get(
+                "process_tick_interval",
+                5
+            )
+        )
+
+
+
+    def save_config(self):
+
+        config = {
+
+            "driver_override":
+                self.driver_override.text()
+                if self.driver_override.text()
+                else None,
+
+
+            "poll_interval_ms":
+                self.poll_interval.value(),
+
+
+            "script_compatibility_default":
+                self.script_compatibility.currentText(),
+
+
+            "script_batch_size":
+                self.script_batch_size.value(),
+
+
+            "script_timeout_ms":
+                self.script_timeout.value(),
+
+
+            "script_execution_mode":
+                self.script_execution_mode.currentText(),
+
+
+            "process_tick_interval":
+                self.process_tick_interval.value()
+        }
+
+
+        if self.bridge:
+
+            self.bridge.update_config(
+                config
+            )
