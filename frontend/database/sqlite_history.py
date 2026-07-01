@@ -1,5 +1,5 @@
+import json
 import sqlite3
-from datetime import datetime
 
 
 class SQLiteHistory:
@@ -13,18 +13,13 @@ class SQLiteHistory:
 
         self.connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS system_history
+            CREATE TABLE IF NOT EXISTS metric_snapshots
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
                 timestamp TEXT NOT NULL,
 
-                cpu REAL,
-                memory REAL,
-                disk REAL,
-
-                network_sent INTEGER,
-                network_recv INTEGER
+                data TEXT NOT NULL
             )
             """
         )
@@ -35,26 +30,18 @@ class SQLiteHistory:
 
         self.connection.execute(
             """
-            INSERT INTO system_history
+            INSERT INTO metric_snapshots
             (
                 timestamp,
-                cpu,
-                memory,
-                disk,
-                network_sent,
-                network_recv
+                data
             )
 
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?)
 
             """,
             (
                 snapshot["timestamp"],
-                snapshot["cpu"],
-                snapshot["memory"],
-                snapshot["disk"],
-                snapshot["network_sent"],
-                snapshot["network_recv"],
+                json.dumps(snapshot["data"]),
             ),
         )
 
@@ -63,8 +50,8 @@ class SQLiteHistory:
     def get_before(self, timestamp):
         cursor = self.connection.execute(
             """
-            SELECT *
-            FROM system_history
+            SELECT id, timestamp, data
+            FROM metric_snapshots
             WHERE timestamp <= ?
             ORDER BY timestamp DESC
             LIMIT 1
@@ -77,11 +64,6 @@ class SQLiteHistory:
         if row is None:
             return None
 
-        return {
-            "timestamp": row[1],
-            "cpu": row[2],
-            "memory": row[3],
-            "disk": row[4],
-            "network_sent": row[5],
-            "network_recv": row[6],
-        }
+        data = json.loads(row[2])  # row[2] = the data column
+        data["timestamp"] = row[1]  # row[1] = the timestamp column
+        return data

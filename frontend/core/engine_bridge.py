@@ -179,6 +179,7 @@ class EngineBridge(QObject):
         self._state_cache: dict[str, Any] | None = None
         self._last_network_io: NetworkIODict | None = None
         self._history = HistoryManager()
+        self._tick_busy: bool = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -201,15 +202,38 @@ class EngineBridge(QObject):
         self._state_cache = None
 
     def _tick(self) -> None:
-        """Timer callback: emit ``state_updated`` with a fresh BridgeContext."""
+        """Timer callback: emit ``state_updated`` with a fresh BridgeContext.
+
+        Offloads cache refresh and data collection to a background thread
+        via ``_Worker`` / ``QThreadPool`` so the UI thread is never blocked.
+        """
+        if self._tick_busy:
+            return  # skip if previous tick still running
+        self._tick_busy = True
+        worker = _Worker(self._background_tick)
+        worker.signals.finished.connect(self._on_tick_data_ready)
+        QThreadPool.globalInstance().start(worker)
+
+    def _background_tick(self) -> BridgeContext:
+        """Collect fresh data on a background thread (runs in QThreadPool)."""
         self._refresh_cache()
         data = self.get_all()
-        ctx = BridgeContext(data=data, bridge=self)
+        return BridgeContext(data=data, bridge=self)
+
+    def _on_tick_data_ready(self, result: object) -> None:
+        """Handle the background tick result on the UI thread."""
+        if not self._tick_busy:
+            return  # belt-and-suspenders: tick was cancelled (e.g. stop_polling)
+        self._tick_busy = False
+        if isinstance(result, Exception):
+            print(f"Tick error: {result}")
+            return
+        ctx = result
         self.state_updated.emit(ctx)
         try:
             self._history.save(ctx)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"History save error: {e}")
 
     # ------------------------------------------------------------------
     # Permission check

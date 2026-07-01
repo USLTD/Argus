@@ -65,6 +65,37 @@ class MemoryBar(QWidget):
     def _on_state(self, ctx: BridgeContext) -> None:
         self.refresh()
 
+    def update_data(self, data: dict) -> None:
+
+        total = data["total"]
+        used = data["used"]
+        available = data["available"]
+        free = data.get("free", data["available"])
+
+        cached = data.get("cached", 0)
+
+        self.used_label.setText(f"Used: {used / (1024**3):.1f} GB")
+
+        self.cached_label.setText(f"Cached: {cached / (1024**3):.1f} GB")
+
+        self.available_label.setText(f"Available: {available / (1024**3):.1f} GB")
+
+        self.free_label.setText(f"Free: {free / (1024**3):.1f} GB")
+
+        if total > 0:
+            self.used_bar.setValue(int(used / total * 100))
+
+            self.cached_bar.setValue(int(cached / total * 100))
+
+            self.available_bar.setValue(int(available / total * 100))
+
+            self.free_bar.setValue(int(free / total * 100))
+        else:
+            self.used_bar.setValue(0)
+            self.cached_bar.setValue(0)
+            self.available_bar.setValue(0)
+            self.free_bar.setValue(0)
+
     def refresh(self):
 
         mem = self._bridge.get_memory_metrics()

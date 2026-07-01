@@ -13,8 +13,6 @@ class NetworkWidget(QWidget):
 
         self._bridge: EngineBridge | None = bridge
 
-        self.old: NetworkIODict = self._bridge.get_network_io()
-
         layout = QVBoxLayout(self)
 
         layout.setSpacing(0)
@@ -36,18 +34,10 @@ class NetworkWidget(QWidget):
             self._bridge.state_updated.connect(self._on_state)
 
     def _on_state(self, ctx: BridgeContext) -> None:
-        self.update_network()
+        net = ctx.data.get("network", {})
+        if isinstance(net, dict):
+            self.update_data(net)
 
-    def update_network(self):
-
-        new = self._bridge.get_network_io()
-
-        download = new["bytes_recv"] - self.old["bytes_recv"]
-
-        upload = new["bytes_sent"] - self.old["bytes_sent"]
-
-        self.old = new
-
-        self.download_graph.update_value(download / (1024**2))
-
-        self.upload_graph.update_value(upload / (1024**2))
+    def update_data(self, data: NetworkIODict) -> None:
+        self.download_graph.update_value(data.get("bytes_recv", 0) / (1024**2))
+        self.upload_graph.update_value(data.get("bytes_sent", 0) / (1024**2))
