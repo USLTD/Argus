@@ -1,4 +1,5 @@
-from backend.storage.config import ArgusConfig
+from backend.core.engine import BackendEngine
+
 from frontend.core.engine_bridge import EngineBridge
 import frontend.core.engine_bridge as _eb_mod
 
@@ -10,9 +11,14 @@ class ArgusApplication:
     def __init__(self, app, engine=None):
 
         self.app = app
-        self.config = ArgusConfig()
-        # Create EngineBridge and set as module-level singleton
-        self.bridge = EngineBridge(engine=engine, config=self.config)
+
+        if engine is None:
+            engine = BackendEngine()
+
+        self.engine = engine
+
+        self.bridge = EngineBridge(engine=self.engine)
+
         _eb_mod.bridge = self.bridge
 
         self.window = MainWindow(bridge=self.bridge)
