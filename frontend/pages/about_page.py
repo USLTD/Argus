@@ -64,6 +64,6 @@ class AboutPage(QWidget):
         layout.addWidget(QLabel(""))
 
         layout.addWidget(QLabel("<b>GitHub</b>"))
-        layout.addWidget(QLabel("https://github.com/<your-repository>"))
+        layout.addWidget(QLabel("<https://github.com/USLTD/Argus>"))
 
         layout.addStretch()
