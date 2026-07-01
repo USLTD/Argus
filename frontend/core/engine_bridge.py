@@ -204,16 +204,32 @@ class EngineBridge(QObject):
         state = self._state
         cpu = state.get("cpu", {})
         assert isinstance(cpu, dict)
-        metrics = cpu.get("metrics", [{}])
+        metrics = cpu.get("metrics", [])
         agg = metrics[0] if metrics else {}
-        per_core_data = [m["usage_percent"] for m in metrics[1:] if "usage_percent" in m]
+
+        per_core_data = [
+            m["usage_percent"]
+            for m in metrics[1:]
+            if "usage_percent" in m
+        ]
+
         static = state.get("static_info", {})
+
+        logical = static.get("cpu_logical_cores", 0)
+        physical = static.get("cpu_physical_cores", 0)
+
+        if logical == 0:
+            logical = len(per_core_data)
+
+        if physical == 0:
+            physical = max(1, logical // 2)
+
         return CpuMetricsDict(
-            cpu_percent=agg.get("usage_percent", 0.0),  # type: ignore[arg-type]
+            cpu_percent=agg.get("usage_percent", 0.0),
             per_core=per_core_data,
-            frequency=agg.get("frequency_mhz"),  # type: ignore[arg-type]
-            physical_cores=static.get("cpu_physical_cores", 0),  # type: ignore[arg-type]
-            logical_cores=static.get("cpu_logical_cores", 0),  # type: ignore[arg-type]
+            frequency=agg.get("frequency_mhz"),
+            physical_cores=physical,
+            logical_cores=logical,
         )
 
     def get_memory_metrics(self) -> MemoryMetricsDict:
