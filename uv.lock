@@ -1,6 +1,11 @@
 version = 1
 revision = 3
 requires-python = ">=3.14"
+resolution-markers = [
+    "sys_platform == 'win32'",
+    "sys_platform == 'linux'",
+    "sys_platform != 'linux' and sys_platform != 'win32'",
+]
 
 [[package]]
 name = "annotated-types"
@@ -16,77 +21,48 @@ name = "argus"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "basedpyright" },
+    { name = "gputil", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "lupa" },
+    { name = "pdoc" },
+    { name = "psutil" },
+    { name = "py-cpuinfo", marker = "sys_platform == 'win32'" },
     { name = "pydantic" },
     { name = "pydantic-settings", extra = ["yaml"] },
-    { name = "textual" },
-]
-
-[package.dev-dependencies]
-cli = [
-    { name = "rich" },
-]
-dev = [
-    { name = "basedpyright" },
-    { name = "pdoc" },
+    { name = "pyqt6" },
+    { name = "pyqtgraph" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-benchmark" },
     { name = "pytest-cov" },
+    { name = "rich" },
     { name = "ruff" },
     { name = "textual" },
-]
-driver-linux = [
-    { name = "gputil" },
-]
-driver-win = [
-    { name = "gputil" },
-    { name = "py-cpuinfo" },
-    { name = "wmi" },
-]
-drivers-common = [
-    { name = "psutil" },
-]
-gui = [
-    { name = "pyqt6" },
-    { name = "pyqtgraph" },
-]
-tui = [
-    { name = "textual" },
+    { name = "wmi", marker = "sys_platform == 'win32'" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "basedpyright", specifier = ">=1.39.8" },
+    { name = "gputil", marker = "sys_platform == 'linux'", specifier = ">=1.4.0" },
+    { name = "gputil", marker = "sys_platform == 'win32'", specifier = ">=1.4.0" },
     { name = "lupa", specifier = "==2.8" },
+    { name = "pdoc", specifier = ">=16.0.0" },
+    { name = "psutil", specifier = ">=7.2.2" },
+    { name = "py-cpuinfo", marker = "sys_platform == 'win32'", specifier = ">=9.0.0" },
     { name = "pydantic", specifier = "==2.14.0a1" },
     { name = "pydantic-settings", extras = ["yaml"], specifier = "==2.14.2" },
-    { name = "textual", specifier = "==8.2.8" },
-]
-
-[package.metadata.requires-dev]
-cli = [{ name = "rich", specifier = ">=13.9" }]
-dev = [
-    { name = "basedpyright", specifier = ">=1.39.8" },
-    { name = "pdoc", specifier = ">=16.0.0" },
+    { name = "pyqt6", specifier = ">=6.8.0" },
+    { name = "pyqtgraph", specifier = ">=0.13.7" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-benchmark", specifier = ">=5.1.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "rich", specifier = ">=13.9" },
     { name = "ruff", specifier = ">=0.11.0" },
-    { name = "textual", specifier = ">=8.2.7" },
+    { name = "textual", specifier = ">=8.2.8" },
+    { name = "wmi", marker = "sys_platform == 'win32'", specifier = ">=1.5.1" },
 ]
-driver-linux = [{ name = "gputil", specifier = ">=1.4.0" }]
-driver-win = [
-    { name = "gputil", specifier = ">=1.4.0" },
-    { name = "py-cpuinfo", specifier = ">=9.0.0" },
-    { name = "wmi", specifier = ">=1.5.1" },
-]
-drivers-common = [{ name = "psutil", specifier = ">=7.2.2" }]
-gui = [
-    { name = "pyqt6", specifier = ">=6.8.0" },
-    { name = "pyqtgraph", specifier = ">=0.13.7" },
-]
-tui = [{ name = "textual", specifier = ">=8.2.7" }]
 
 [[package]]
 name = "basedpyright"

@@ -3,12 +3,13 @@ name = "argus"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    # Core
     "lupa==2.8",
     "pydantic==2.14.0a1",
-    "pydantic-settings[yaml]==2.14.2",
+    "pydantic-settings[yaml]==2.14.2"
+]
 
-    # Development tools
+[dependency-groups]
+dev = [
     "basedpyright>=1.39.8",
     "pdoc>=16.0.0",
     "pytest>=9.1.1",
@@ -16,19 +17,27 @@ dependencies = [
     "pytest-benchmark>=5.1.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.11.0",
-
-    # Interfaces
+]
+tui = [
     "textual>=8.2.8",
+]
+cli = [
     "rich>=13.9",
+]
+gui = [
     "PyQt6>=6.8.0",
     "pyqtgraph>=0.13.7",
-
-    # Drivers
+]
+drivers-common = [
     "psutil>=7.2.2",
-    "gputil>=1.4.0; platform_system == 'Windows'",
-    "py-cpuinfo>=9.0.0; platform_system == 'Windows'",
-    "WMI>=1.5.1; platform_system == 'Windows'",
-    "gputil>=1.4.0; platform_system == 'Linux'"
+]
+driver-win = [
+    "gputil>=1.4.0",
+    "py-cpuinfo>=9.0.0",
+    "WMI>=1.5.1",
+]
+driver-linux = [
+    "gputil>=1.4.0",
 ]
 
 [tool.basedpyright]

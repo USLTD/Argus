@@ -4,11 +4,22 @@
 
 ## Quick Start
 
+If you have [uv](https://docs.astral.sh/uv) (recommended)
+
 ```bash
 uv sync
 uv run main_console.py # launch basic CLI
 uv run main_tui.py     # launch Textual TUI
 uv run main_gui.py     # launch PyQt6 GUI (requires PyQt6)
+```
+
+or with plain Python
+
+```bash
+pip install -r pyproject.toml
+python main_console.py # launch basic CLI
+python main_tui.py     # launch Textual TUI
+python main_gui.py     # launch PyQt6 GUI (requires PyQt6)
 ```
 
 ## Architecture
