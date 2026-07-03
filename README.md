@@ -16,10 +16,10 @@ uv run main_gui.py     # launch PyQt6 GUI (requires PyQt6)
 or with plain Python
 
 ```bash
-pip install -r pyproject.toml
+python -m pip install -r requirements.txt
 python main_console.py # launch basic CLI
 python main_tui.py     # launch Textual TUI
-python main_gui.py     # launch PyQt6 GUI (requires PyQt6)
+python run main_gui.py     # launch PyQt6 GUI (requires PyQt6)
 ```
 
 ## Architecture
